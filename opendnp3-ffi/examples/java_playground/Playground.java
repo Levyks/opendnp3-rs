@@ -1,34 +1,34 @@
-import com.levyks.opendnp3.FfiAnalog;
-import com.levyks.opendnp3.FfiAnalogOutputStatus;
-import com.levyks.opendnp3.FfiBinary;
-import com.levyks.opendnp3.FfiBinaryOutputStatus;
-import com.levyks.opendnp3.FfiClassField;
-import com.levyks.opendnp3.FfiCommandHandler;
-import com.levyks.opendnp3.FfiCommandResult;
-import com.levyks.opendnp3.FfiCommandSet;
-import com.levyks.opendnp3.FfiCommandStatus;
-import com.levyks.opendnp3.FfiCounter;
-import com.levyks.opendnp3.FfiCrob;
-import com.levyks.opendnp3.FfiDatabaseConfig;
-import com.levyks.opendnp3.FfiDnpTime;
-import com.levyks.opendnp3.FfiDoubleBitBinary;
-import com.levyks.opendnp3.FfiEventMode;
-import com.levyks.opendnp3.FfiFrozenCounter;
-import com.levyks.opendnp3.FfiLinkConfig;
-import com.levyks.opendnp3.FfiMaster;
-import com.levyks.opendnp3.FfiMasterEvent;
-import com.levyks.opendnp3.FfiMasterParams;
-import com.levyks.opendnp3.FfiMasterTaskType;
-import com.levyks.opendnp3.FfiOctetString;
-import com.levyks.opendnp3.FfiOperateType;
-import com.levyks.opendnp3.FfiOperationType;
-import com.levyks.opendnp3.FfiOutstation;
-import com.levyks.opendnp3.FfiOutstationParams;
-import com.levyks.opendnp3.FfiSoeHandler;
-import com.levyks.opendnp3.FfiTaskCompletion;
-import com.levyks.opendnp3.FfiTimeSyncMode;
-import com.levyks.opendnp3.FfiTimestampQuality;
-import com.levyks.opendnp3.FfiTripCloseCode;
+import com.levyks.opendnp3.Analog;
+import com.levyks.opendnp3.AnalogOutputStatus;
+import com.levyks.opendnp3.Binary;
+import com.levyks.opendnp3.BinaryOutputStatus;
+import com.levyks.opendnp3.ClassField;
+import com.levyks.opendnp3.CommandHandler;
+import com.levyks.opendnp3.CommandResult;
+import com.levyks.opendnp3.CommandSet;
+import com.levyks.opendnp3.CommandStatus;
+import com.levyks.opendnp3.Counter;
+import com.levyks.opendnp3.Crob;
+import com.levyks.opendnp3.DatabaseConfig;
+import com.levyks.opendnp3.DnpTime;
+import com.levyks.opendnp3.DoubleBitBinary;
+import com.levyks.opendnp3.EventMode;
+import com.levyks.opendnp3.FrozenCounter;
+import com.levyks.opendnp3.LinkConfig;
+import com.levyks.opendnp3.Master;
+import com.levyks.opendnp3.MasterEvent;
+import com.levyks.opendnp3.MasterParams;
+import com.levyks.opendnp3.MasterTaskType;
+import com.levyks.opendnp3.OctetString;
+import com.levyks.opendnp3.OperateType;
+import com.levyks.opendnp3.OperationType;
+import com.levyks.opendnp3.Outstation;
+import com.levyks.opendnp3.OutstationParams;
+import com.levyks.opendnp3.SoeHandler;
+import com.levyks.opendnp3.TaskCompletion;
+import com.levyks.opendnp3.TimeSyncMode;
+import com.levyks.opendnp3.TimestampQuality;
+import com.levyks.opendnp3.TripCloseCode;
 
 import com.levyks.opendnp3.tcp.TcpConnection;
 import com.levyks.opendnp3.tcp.TcpServer;
@@ -54,22 +54,22 @@ import java.util.concurrent.TimeUnit;
  */
 public final class Playground {
     public static void main(String[] args) throws Exception {
-        FfiClassField allClasses = new FfiClassField(true, true, true, true);
-        FfiClassField allEvents = new FfiClassField(false, true, true, true);
-        FfiClassField noClasses = new FfiClassField(false, false, false, false);
-        FfiDnpTime invalidTime = new FfiDnpTime(0, FfiTimestampQuality.INVALID);
+        ClassField allClasses = new ClassField(true, true, true, true);
+        ClassField allEvents = new ClassField(false, true, true, true);
+        ClassField noClasses = new ClassField(false, false, false, false);
+        DnpTime invalidTime = new DnpTime(0, TimestampQuality.INVALID);
 
-        FfiDatabaseConfig db = new FfiDatabaseConfig((short) 3);
+        DatabaseConfig db = new DatabaseConfig((short) 3);
         PlaygroundCommandHandler cmdHandler = new PlaygroundCommandHandler();
-        FfiOutstation outstation = new FfiOutstation(
-                new FfiLinkConfig(false, (short) 10, (short) 1, 1000, 60_000, false),
-                new FfiOutstationParams(2048, 2048, false, 5000, 5000, 5000, 10_000, 16, allEvents, false, 10),
+        Outstation outstation = new Outstation(
+                new LinkConfig(false, (short) 10, (short) 1, 1000, 60_000, false),
+                new OutstationParams(2048, 2048, false, 5000, 5000, 5000, 10_000, 16, allEvents, false, 10),
                 db,
                 cmdHandler);
         outstation.updateBinary(
-                new FfiBinary((short) 0, true, (byte) 0x81, invalidTime), FfiEventMode.SUPPRESS);
+                new Binary((short) 0, true, (byte) 0x81, invalidTime), EventMode.SUPPRESS);
         outstation.updateAnalog(
-                new FfiAnalog((short) 2, 230.5, (byte) 0x01, invalidTime), FfiEventMode.SUPPRESS);
+                new Analog((short) 2, 230.5, (byte) 0x01, invalidTime), EventMode.SUPPRESS);
 
         try (TcpServer listener = TcpServer.listen("127.0.0.1", 0)) {
             int port = listener.port();
@@ -84,11 +84,11 @@ public final class Playground {
             });
 
             PlaygroundSoeHandler soe = new PlaygroundSoeHandler();
-            FfiMaster master = new FfiMaster(
-                    new FfiLinkConfig(true, (short) 1, (short) 10, 1000, 60_000, false),
-                    new FfiMasterParams(
+            Master master = new Master(
+                    new LinkConfig(true, (short) 1, (short) 10, 1000, 60_000, false),
+                    new MasterParams(
                             5000,
-                            FfiTimeSyncMode.NONE,
+                            TimeSyncMode.NONE,
                             false,
                             false,
                             noClasses,
@@ -116,11 +116,11 @@ public final class Playground {
 
                 System.out.println("Waiting for startup integrity poll...");
                 while (true) {
-                    FfiMasterEvent ev = awaitEvent(master);
-                    if (ev instanceof FfiMasterEvent.TaskComplete tc
-                            && tc.taskType == FfiMasterTaskType.STARTUP_INTEGRITY_POLL) {
+                    MasterEvent ev = awaitEvent(master);
+                    if (ev instanceof MasterEvent.TaskComplete tc
+                            && tc.taskType == MasterTaskType.STARTUP_INTEGRITY_POLL) {
                         System.out.println("Startup integrity poll finished: " + tc.result);
-                        if (tc.result != FfiTaskCompletion.SUCCESS) {
+                        if (tc.result != TaskCompletion.SUCCESS) {
                             throw new IllegalStateException("Expected SUCCESS, got " + tc.result);
                         }
                         break;
@@ -128,30 +128,30 @@ public final class Playground {
                 }
 
                 System.out.println("Sending SBO CROB command to index 1...");
-                try (FfiCommandSet cmds = new FfiCommandSet()) {
+                try (CommandSet cmds = new CommandSet()) {
                     cmds.addCrob(
                             (short) 1,
-                            new FfiCrob(
-                                    FfiOperationType.PULSE_ON,
-                                    FfiTripCloseCode.CLOSE,
+                            new Crob(
+                                    OperationType.PULSE_ON,
+                                    TripCloseCode.CLOSE,
                                     false,
                                     (byte) 1,
                                     100,
                                     100,
-                                    FfiCommandStatus.SUCCESS));
+                                    CommandStatus.SUCCESS));
                     master.selectAndOperate(cmds);
                 }
 
                 while (true) {
-                    FfiMasterEvent ev = awaitEvent(master);
-                    if (ev instanceof FfiMasterEvent.CommandComplete cc) {
-                        FfiCommandResult result = cc.result;
+                    MasterEvent ev = awaitEvent(master);
+                    if (ev instanceof MasterEvent.CommandComplete cc) {
+                        CommandResult result = cc.result;
                         System.out.println("Command complete: summary="
                                 + result.summary
                                 + ", points="
                                 + result.points.size());
-                        if (result.summary != FfiTaskCompletion.SUCCESS
-                                || result.points.get(0).status != FfiCommandStatus.SUCCESS) {
+                        if (result.summary != TaskCompletion.SUCCESS
+                                || result.points.get(0).status != CommandStatus.SUCCESS) {
                             throw new IllegalStateException("Command failed");
                         }
                         break;
@@ -160,15 +160,15 @@ public final class Playground {
 
                 System.out.println("Updating Analog[2] -> 241 and scanning...");
                 outstation.updateAnalog(
-                        new FfiAnalog((short) 2, 241.0, (byte) 0x01, invalidTime), FfiEventMode.FORCE);
+                        new Analog((short) 2, 241.0, (byte) 0x01, invalidTime), EventMode.FORCE);
                 master.scanClasses(allClasses);
 
                 while (true) {
-                    FfiMasterEvent ev = awaitEvent(master);
+                    MasterEvent ev = awaitEvent(master);
                     System.out.println("  [Master Event] " + ev);
-                    if (ev instanceof FfiMasterEvent.TaskComplete tc) {
+                    if (ev instanceof MasterEvent.TaskComplete tc) {
                         System.out.println("On-demand scan finished: " + tc.taskType + " -> " + tc.result);
-                        if (tc.result != FfiTaskCompletion.SUCCESS) {
+                        if (tc.result != TaskCompletion.SUCCESS) {
                             throw new IllegalStateException("Expected SUCCESS, got " + tc.result);
                         }
                         break;
@@ -189,7 +189,7 @@ public final class Playground {
                 }
                 if (cmdHandler.operated.size() != 1
                         || cmdHandler.operated.get(0).index != 1
-                        || cmdHandler.operated.get(0).opType != FfiOperateType.SELECT_BEFORE_OPERATE) {
+                        || cmdHandler.operated.get(0).opType != OperateType.SELECT_BEFORE_OPERATE) {
                     throw new IllegalStateException("Missing operate");
                 }
 
@@ -208,8 +208,8 @@ public final class Playground {
         System.out.println("ALL JAVA DNP3 CHECKS PASSED!");
     }
 
-    private static FfiMasterEvent awaitEvent(FfiMaster master) throws Exception {
-        Optional<FfiMasterEvent> event = master.nextEvent().get(20, TimeUnit.SECONDS);
+    private static MasterEvent awaitEvent(Master master) throws Exception {
+        Optional<MasterEvent> event = master.nextEvent().get(20, TimeUnit.SECONDS);
         if (event.isEmpty()) {
             throw new IllegalStateException("Master event stream ended");
         }
@@ -218,13 +218,13 @@ public final class Playground {
 
     private Playground() {}
 
-    static final class PlaygroundSoeHandler implements FfiSoeHandler {
-        final List<FfiBinary> binaries = new ArrayList<>();
-        final List<FfiAnalog> analogs = new ArrayList<>();
+    static final class PlaygroundSoeHandler implements SoeHandler {
+        final List<Binary> binaries = new ArrayList<>();
+        final List<Analog> analogs = new ArrayList<>();
 
         @Override
-        public void onBinary(List<FfiBinary> values) {
-            for (FfiBinary value : values) {
+        public void onBinary(List<Binary> values) {
+            for (Binary value : values) {
                 System.out.printf(
                         "  [Master SOE] Binary[%d] = %s (flags=0x%02x)%n",
                         value.index,
@@ -235,20 +235,20 @@ public final class Playground {
         }
 
         @Override
-        public void onDoubleBit(List<FfiDoubleBitBinary> values) {}
+        public void onDoubleBit(List<DoubleBitBinary> values) {}
 
         @Override
-        public void onBinaryOutputStatus(List<FfiBinaryOutputStatus> values) {}
+        public void onBinaryOutputStatus(List<BinaryOutputStatus> values) {}
 
         @Override
-        public void onCounter(List<FfiCounter> values) {}
+        public void onCounter(List<Counter> values) {}
 
         @Override
-        public void onFrozenCounter(List<FfiFrozenCounter> values) {}
+        public void onFrozenCounter(List<FrozenCounter> values) {}
 
         @Override
-        public void onAnalog(List<FfiAnalog> values) {
-            for (FfiAnalog value : values) {
+        public void onAnalog(List<Analog> values) {
+            for (Analog value : values) {
                 System.out.printf(
                         "  [Master SOE] Analog[%d] = %s (flags=0x%02x)%n",
                         value.index,
@@ -259,79 +259,79 @@ public final class Playground {
         }
 
         @Override
-        public void onAnalogOutputStatus(List<FfiAnalogOutputStatus> values) {}
+        public void onAnalogOutputStatus(List<AnalogOutputStatus> values) {}
 
         @Override
-        public void onOctetString(List<FfiOctetString> values) {}
+        public void onOctetString(List<OctetString> values) {}
     }
 
     static final class Operated {
         final short index;
-        final FfiOperateType opType;
+        final OperateType opType;
 
-        Operated(short index, FfiOperateType opType) {
+        Operated(short index, OperateType opType) {
             this.index = index;
             this.opType = opType;
         }
     }
 
-    static final class PlaygroundCommandHandler implements FfiCommandHandler {
+    static final class PlaygroundCommandHandler implements CommandHandler {
         final List<Short> selected = new ArrayList<>();
         final List<Operated> operated = new ArrayList<>();
 
         @Override
-        public FfiCommandStatus selectCrob(FfiCrob command, short index) {
+        public CommandStatus selectCrob(Crob command, short index) {
             System.out.println("  [Outstation CMD] SELECT CROB index=" + index + " op=" + command.opType);
             selected.add(index);
-            return FfiCommandStatus.SUCCESS;
+            return CommandStatus.SUCCESS;
         }
 
         @Override
-        public FfiCommandStatus operateCrob(FfiCrob command, short index, FfiOperateType opType) {
+        public CommandStatus operateCrob(Crob command, short index, OperateType opType) {
             System.out.println(
                     "  [Outstation CMD] OPERATE CROB index=" + index + " op=" + command.opType + " mode=" + opType);
             operated.add(new Operated(index, opType));
-            return FfiCommandStatus.SUCCESS;
+            return CommandStatus.SUCCESS;
         }
 
         @Override
-        public FfiCommandStatus selectAoI32(int value, short index) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus selectAoI32(int value, short index) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus operateAoI32(int value, short index, FfiOperateType opType) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus operateAoI32(int value, short index, OperateType opType) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus selectAoI16(short value, short index) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus selectAoI16(short value, short index) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus operateAoI16(short value, short index, FfiOperateType opType) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus operateAoI16(short value, short index, OperateType opType) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus selectAoF32(float value, short index) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus selectAoF32(float value, short index) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus operateAoF32(float value, short index, FfiOperateType opType) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus operateAoF32(float value, short index, OperateType opType) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus selectAoF64(double value, short index) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus selectAoF64(double value, short index) {
+            return CommandStatus.NOT_SUPPORTED;
         }
 
         @Override
-        public FfiCommandStatus operateAoF64(double value, short index, FfiOperateType opType) {
-            return FfiCommandStatus.NOT_SUPPORTED;
+        public CommandStatus operateAoF64(double value, short index, OperateType opType) {
+            return CommandStatus.NOT_SUPPORTED;
         }
     }
 }

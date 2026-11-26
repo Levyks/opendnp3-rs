@@ -1,38 +1,35 @@
-//! Exported BoltFFI Master & CommandSet classes (100% Tokio-free).
+//! Exported BoltFFI master and command-set classes (Tokio-free).
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::callbacks::{Dnp3Stream, SoeBridge, SoeHandler, StreamBridge};
+use crate::pipe::{BytePipe, PipeStream};
+use crate::types::{
+    ClassField, Crob, LinkConfig, MasterEvent, MasterParams, PointClass, RestartType, ao_f32,
+    ao_f64, ao_i16, ao_i32, gv_from_raw, range_from_raw,
+};
 use boltffi::export;
 use opendnp3::driver::{
     MasterCommand, MasterHandle, UnboundedReceiver, UnboundedSender, master_channel,
     run_master_session, unbounded,
 };
-use opendnp3::link::{Addresses, LinkConfig};
-use opendnp3::master::{CommandSet, DefaultMasterApplication, Master, MasterEvent};
 
-use crate::callbacks::{Dnp3Stream, FfiSoeHandler, SoeBridge, StreamBridge};
-use crate::pipe::{FfiBytePipe, PipeStream};
-use crate::types::{
-    FfiClassField, FfiCrob, FfiLinkConfig, FfiMasterEvent, FfiMasterParams, FfiPointClass,
-    FfiRestartType, ao_f32, ao_f64, ao_i16, ao_i32, gv_from_raw, range_from_raw,
-};
-
-/// Mutable builder for CROB and Analog Output commands.
+/// Mutable builder for CROB and analog-output commands.
 #[export]
-pub struct FfiCommandSet {
-    inner: Mutex<CommandSet>,
+pub struct CommandSet {
+    inner: Mutex<opendnp3::master::CommandSet>,
 }
 
 #[export]
-impl FfiCommandSet {
+impl CommandSet {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(CommandSet::new()),
+            inner: Mutex::new(opendnp3::master::CommandSet::new()),
         }
     }
 
-    pub fn add_crob(&self, index: u16, cmd: FfiCrob) {
+    pub fn add_crob(&self, index: u16, cmd: Crob) {
         self.inner.lock().unwrap().add_crob(index, cmd.into());
     }
 
@@ -53,22 +50,22 @@ impl FfiCommandSet {
     }
 }
 
-impl Default for FfiCommandSet {
+impl Default for CommandSet {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Stateful DNP3 Master driven by the target language's async runtime.
+/// Stateful DNP3 master driven by the target language's async runtime.
 #[export]
-pub struct FfiMaster {
-    link_cfg: LinkConfig,
-    master: Mutex<Option<Master>>,
-    soe: Arc<dyn FfiSoeHandler>,
+pub struct Master {
+    link_cfg: opendnp3::link::LinkConfig,
+    master: Mutex<Option<opendnp3::master::Master>>,
+    soe: Arc<dyn SoeHandler>,
     handle: MasterHandle,
     cmd_rx: UnboundedReceiver<MasterCommand>,
-    ev_tx: UnboundedSender<MasterEvent>,
-    ev_rx: UnboundedReceiver<MasterEvent>,
+    ev_tx: UnboundedSender<opendnp3::master::MasterEvent>,
+    ev_rx: UnboundedReceiver<opendnp3::master::MasterEvent>,
 }
 
 struct RestoreOnDrop<'a, T> {
@@ -85,15 +82,11 @@ impl<T> Drop for RestoreOnDrop<'_, T> {
 }
 
 #[export]
-impl FfiMaster {
-    pub fn new(
-        link_cfg: FfiLinkConfig,
-        params: FfiMasterParams,
-        soe: Arc<dyn FfiSoeHandler>,
-    ) -> Self {
-        let link_cfg: LinkConfig = link_cfg.into();
-        let addresses = Addresses::new(link_cfg.local_addr, link_cfg.remote_addr);
-        let master = Master::new(params.into(), addresses);
+impl Master {
+    pub fn new(link_cfg: LinkConfig, params: MasterParams, soe: Arc<dyn SoeHandler>) -> Self {
+        let link_cfg: opendnp3::link::LinkConfig = link_cfg.into();
+        let addresses = opendnp3::link::Addresses::new(link_cfg.local_addr, link_cfg.remote_addr);
+        let master = opendnp3::master::Master::new(params.into(), addresses);
         let (handle, cmd_rx) = master_channel();
         let (ev_tx, ev_rx) = unbounded();
         Self {
@@ -120,7 +113,7 @@ impl FfiMaster {
         };
         let bridge = StreamBridge(stream);
         let mut soe = SoeBridge(Arc::clone(&self.soe));
-        let mut app = DefaultMasterApplication;
+        let mut app = opendnp3::master::DefaultMasterApplication;
         run_master_session(
             &bridge,
             self.link_cfg.clone(),
@@ -133,9 +126,9 @@ impl FfiMaster {
         .await
     }
 
-    /// Drive a single connection using an [`FfiBytePipe`] (recommended for Python `asyncio`).
+    /// Drive a single connection using an [`BytePipe`] (recommended for Python `asyncio`).
     /// Returns `true` if `shutdown()` was called, `false` if the pipe closed.
-    pub async fn run_with_pipe(&self, pipe: &FfiBytePipe) -> bool {
+    pub async fn run_with_pipe(&self, pipe: &BytePipe) -> bool {
         let taken = self.master.lock().unwrap().take();
         let Some(master) = taken else {
             return false;
@@ -146,7 +139,7 @@ impl FfiMaster {
         };
         let stream = PipeStream::new(pipe);
         let mut soe = SoeBridge(Arc::clone(&self.soe));
-        let mut app = DefaultMasterApplication;
+        let mut app = opendnp3::master::DefaultMasterApplication;
         run_master_session(
             &stream,
             self.link_cfg.clone(),
@@ -159,12 +152,12 @@ impl FfiMaster {
         .await
     }
 
-    /// Await the next [`FfiMasterEvent`] produced by the master.
-    pub async fn next_event(&self) -> Option<FfiMasterEvent> {
+    /// Await the next [`MasterEvent`] produced by the master.
+    pub async fn next_event(&self) -> Option<MasterEvent> {
         self.ev_rx.recv().await.map(Into::into)
     }
 
-    pub fn scan_classes(&self, classes: FfiClassField) {
+    pub fn scan_classes(&self, classes: ClassField) {
         self.handle.scan_classes(classes.into());
     }
 
@@ -177,35 +170,35 @@ impl FfiMaster {
         self.handle.scan_all_objects(gv_from_raw(group, variation));
     }
 
-    pub fn add_class_scan(&self, classes: FfiClassField, period_ms: u64) {
+    pub fn add_class_scan(&self, classes: ClassField, period_ms: u64) {
         self.handle
             .add_class_scan(classes.into(), Duration::from_millis(period_ms));
     }
 
-    pub fn assign_class_all(&self, class: FfiPointClass, group: u8, variation: u8) {
+    pub fn assign_class_all(&self, class: PointClass, group: u8, variation: u8) {
         self.handle
             .assign_class_all(class.into(), gv_from_raw(group, variation));
     }
 
-    pub fn select_and_operate(&self, commands: &FfiCommandSet) {
+    pub fn select_and_operate(&self, commands: &CommandSet) {
         let cs = commands.inner.lock().unwrap().clone();
         self.handle.select_and_operate(cs);
     }
 
-    pub fn direct_operate(&self, commands: &FfiCommandSet, no_ack: bool) {
+    pub fn direct_operate(&self, commands: &CommandSet, no_ack: bool) {
         let cs = commands.inner.lock().unwrap().clone();
         self.handle.direct_operate(cs, no_ack);
     }
 
-    pub fn restart(&self, restart_type: FfiRestartType) {
+    pub fn restart(&self, restart_type: RestartType) {
         self.handle.restart(restart_type.into());
     }
 
-    pub fn enable_unsolicited(&self, classes: FfiClassField) {
+    pub fn enable_unsolicited(&self, classes: ClassField) {
         self.handle.enable_unsolicited(classes.into());
     }
 
-    pub fn disable_unsolicited(&self, classes: FfiClassField) {
+    pub fn disable_unsolicited(&self, classes: ClassField) {
         self.handle.disable_unsolicited(classes.into());
     }
 

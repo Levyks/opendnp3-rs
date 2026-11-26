@@ -1,65 +1,57 @@
-//! Exported BoltFFI Outstation & DatabaseConfig classes (100% Tokio-free).
+//! Exported BoltFFI outstation and database-config classes (Tokio-free).
 
 use std::sync::{Arc, Mutex};
 
+use crate::callbacks::{CommandBridge, CommandHandler, Dnp3Stream, StreamBridge};
+use crate::pipe::{BytePipe, PipeStream};
+use crate::types::{
+    Analog, AnalogOutputStatus, Binary, BinaryOutputStatus, Counter, DoubleBitBinary, EventClass,
+    EventMode, FrozenCounter, LinkConfig, OctetString, OutstationParams,
+};
 use boltffi::export;
 use opendnp3::driver::{
     OutstationCommand, OutstationHandle, UnboundedReceiver, outstation_channel,
     run_outstation_session,
 };
-use opendnp3::link::{Addresses, LinkConfig};
-use opendnp3::outstation::{
-    AnalogConfig, AnalogOutputStatusConfig, BinaryConfig, BinaryOutputStatusConfig, CounterConfig,
-    DatabaseConfig, DefaultOutstationApplication, DoubleBinaryConfig, FrozenCounterConfig,
-    OctetStringConfig, Outstation, OutstationConfig,
-};
-
-use crate::callbacks::{CommandBridge, Dnp3Stream, FfiCommandHandler, StreamBridge};
-use crate::pipe::{FfiBytePipe, PipeStream};
-use crate::types::{
-    FfiAnalog, FfiAnalogOutputStatus, FfiBinary, FfiBinaryOutputStatus, FfiCounter,
-    FfiDoubleBitBinary, FfiEventClass, FfiEventMode, FfiFrozenCounter, FfiLinkConfig,
-    FfiOctetString, FfiOutstationParams,
-};
 
 /// Builder for configuring an outstation's static database points.
 #[export]
-pub struct FfiDatabaseConfig {
-    inner: Mutex<DatabaseConfig>,
+pub struct DatabaseConfig {
+    inner: Mutex<opendnp3::outstation::DatabaseConfig>,
 }
 
 #[export]
-impl FfiDatabaseConfig {
+impl DatabaseConfig {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(DatabaseConfig::default()),
+            inner: Mutex::new(opendnp3::outstation::DatabaseConfig::default()),
         }
     }
 
     pub fn all_types(count: u16) -> Self {
         Self {
-            inner: Mutex::new(DatabaseConfig::all_types(count)),
+            inner: Mutex::new(opendnp3::outstation::DatabaseConfig::all_types(count)),
         }
     }
 
-    pub fn add_binary(&self, index: u16, class: Option<FfiEventClass>) {
-        let cfg = BinaryConfig {
+    pub fn add_binary(&self, index: u16, class: Option<EventClass>) {
+        let cfg = opendnp3::outstation::BinaryConfig {
             class: class.map(Into::into),
             ..Default::default()
         };
         self.inner.lock().unwrap().binary.insert(index, cfg);
     }
 
-    pub fn add_double_bit(&self, index: u16, class: Option<FfiEventClass>) {
-        let cfg = DoubleBinaryConfig {
+    pub fn add_double_bit(&self, index: u16, class: Option<EventClass>) {
+        let cfg = opendnp3::outstation::DoubleBinaryConfig {
             class: class.map(Into::into),
             ..Default::default()
         };
         self.inner.lock().unwrap().double_binary.insert(index, cfg);
     }
 
-    pub fn add_binary_output_status(&self, index: u16, class: Option<FfiEventClass>) {
-        let cfg = BinaryOutputStatusConfig {
+    pub fn add_binary_output_status(&self, index: u16, class: Option<EventClass>) {
+        let cfg = opendnp3::outstation::BinaryOutputStatusConfig {
             class: class.map(Into::into),
             ..Default::default()
         };
@@ -70,8 +62,8 @@ impl FfiDatabaseConfig {
             .insert(index, cfg);
     }
 
-    pub fn add_counter(&self, index: u16, class: Option<FfiEventClass>, deadband: f64) {
-        let cfg = CounterConfig {
+    pub fn add_counter(&self, index: u16, class: Option<EventClass>, deadband: f64) {
+        let cfg = opendnp3::outstation::CounterConfig {
             class: class.map(Into::into),
             deadband,
             ..Default::default()
@@ -79,8 +71,8 @@ impl FfiDatabaseConfig {
         self.inner.lock().unwrap().counter.insert(index, cfg);
     }
 
-    pub fn add_frozen_counter(&self, index: u16, class: Option<FfiEventClass>, deadband: f64) {
-        let cfg = FrozenCounterConfig {
+    pub fn add_frozen_counter(&self, index: u16, class: Option<EventClass>, deadband: f64) {
+        let cfg = opendnp3::outstation::FrozenCounterConfig {
             class: class.map(Into::into),
             deadband,
             ..Default::default()
@@ -88,8 +80,8 @@ impl FfiDatabaseConfig {
         self.inner.lock().unwrap().frozen_counter.insert(index, cfg);
     }
 
-    pub fn add_analog(&self, index: u16, class: Option<FfiEventClass>, deadband: f64) {
-        let cfg = AnalogConfig {
+    pub fn add_analog(&self, index: u16, class: Option<EventClass>, deadband: f64) {
+        let cfg = opendnp3::outstation::AnalogConfig {
             class: class.map(Into::into),
             deadband,
             ..Default::default()
@@ -97,13 +89,8 @@ impl FfiDatabaseConfig {
         self.inner.lock().unwrap().analog.insert(index, cfg);
     }
 
-    pub fn add_analog_output_status(
-        &self,
-        index: u16,
-        class: Option<FfiEventClass>,
-        deadband: f64,
-    ) {
-        let cfg = AnalogOutputStatusConfig {
+    pub fn add_analog_output_status(&self, index: u16, class: Option<EventClass>, deadband: f64) {
+        let cfg = opendnp3::outstation::AnalogOutputStatusConfig {
             class: class.map(Into::into),
             deadband,
             ..Default::default()
@@ -115,8 +102,8 @@ impl FfiDatabaseConfig {
             .insert(index, cfg);
     }
 
-    pub fn add_octet_string(&self, index: u16, class: Option<FfiEventClass>) {
-        let cfg = OctetStringConfig {
+    pub fn add_octet_string(&self, index: u16, class: Option<EventClass>) {
+        let cfg = opendnp3::outstation::OctetStringConfig {
             class: class.map(Into::into),
             ..Default::default()
         };
@@ -124,18 +111,18 @@ impl FfiDatabaseConfig {
     }
 }
 
-impl Default for FfiDatabaseConfig {
+impl Default for DatabaseConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Stateful DNP3 Outstation driven by the target language's async runtime.
+/// Stateful DNP3 outstation driven by the target language's async runtime.
 #[export]
-pub struct FfiOutstation {
-    link_cfg: LinkConfig,
-    outstation: Mutex<Option<Outstation>>,
-    cmd_handler: Arc<dyn FfiCommandHandler>,
+pub struct Outstation {
+    link_cfg: opendnp3::link::LinkConfig,
+    outstation: Mutex<Option<opendnp3::outstation::Outstation>>,
+    cmd_handler: Arc<dyn CommandHandler>,
     handle: OutstationHandle,
     cmd_rx: UnboundedReceiver<OutstationCommand>,
 }
@@ -154,22 +141,22 @@ impl<T> Drop for RestoreOnDrop<'_, T> {
 }
 
 #[export]
-impl FfiOutstation {
+impl Outstation {
     pub fn new(
-        link_cfg: FfiLinkConfig,
-        params: FfiOutstationParams,
-        database: &FfiDatabaseConfig,
-        cmd_handler: Arc<dyn FfiCommandHandler>,
+        link_cfg: LinkConfig,
+        params: OutstationParams,
+        database: &DatabaseConfig,
+        cmd_handler: Arc<dyn CommandHandler>,
     ) -> Self {
-        let link_cfg: LinkConfig = link_cfg.into();
-        let addresses = Addresses::new(link_cfg.local_addr, link_cfg.remote_addr);
+        let link_cfg: opendnp3::link::LinkConfig = link_cfg.into();
+        let addresses = opendnp3::link::Addresses::new(link_cfg.local_addr, link_cfg.remote_addr);
         let (o_params, event_buffer) = params.into_core();
-        let cfg = OutstationConfig {
+        let cfg = opendnp3::outstation::OutstationConfig {
             params: o_params,
             event_buffer,
             database: database.inner.lock().unwrap().clone(),
         };
-        let outstation = Outstation::new(cfg, addresses);
+        let outstation = opendnp3::outstation::Outstation::new(cfg, addresses);
         let (handle, cmd_rx) = outstation_channel();
         Self {
             link_cfg,
@@ -193,7 +180,7 @@ impl FfiOutstation {
         };
         let bridge = StreamBridge(stream);
         let mut cmd_handler = CommandBridge(Arc::clone(&self.cmd_handler));
-        let mut app = DefaultOutstationApplication;
+        let mut app = opendnp3::outstation::DefaultOutstationApplication;
         run_outstation_session(
             &bridge,
             self.link_cfg.clone(),
@@ -205,9 +192,9 @@ impl FfiOutstation {
         .await
     }
 
-    /// Drive a single connection using an [`FfiBytePipe`] (recommended for Python `asyncio`).
+    /// Drive a single connection using an [`BytePipe`] (recommended for Python `asyncio`).
     /// Returns `true` if `shutdown()` was called, `false` if the pipe closed.
-    pub async fn run_with_pipe(&self, pipe: &FfiBytePipe) -> bool {
+    pub async fn run_with_pipe(&self, pipe: &BytePipe) -> bool {
         let taken = self.outstation.lock().unwrap().take();
         let Some(outstation) = taken else {
             return false;
@@ -218,7 +205,7 @@ impl FfiOutstation {
         };
         let stream = PipeStream::new(pipe);
         let mut cmd_handler = CommandBridge(Arc::clone(&self.cmd_handler));
-        let mut app = DefaultOutstationApplication;
+        let mut app = opendnp3::outstation::DefaultOutstationApplication;
         run_outstation_session(
             &stream,
             self.link_cfg.clone(),
@@ -230,42 +217,42 @@ impl FfiOutstation {
         .await
     }
 
-    pub fn update_binary(&self, value: FfiBinary, mode: FfiEventMode) {
+    pub fn update_binary(&self, value: Binary, mode: EventMode) {
         self.handle
             .update_binary(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_double_bit(&self, value: FfiDoubleBitBinary, mode: FfiEventMode) {
+    pub fn update_double_bit(&self, value: DoubleBitBinary, mode: EventMode) {
         self.handle
             .update_double_bit(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_binary_output_status(&self, value: FfiBinaryOutputStatus, mode: FfiEventMode) {
+    pub fn update_binary_output_status(&self, value: BinaryOutputStatus, mode: EventMode) {
         self.handle
             .update_binary_output_status(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_counter(&self, value: FfiCounter, mode: FfiEventMode) {
+    pub fn update_counter(&self, value: Counter, mode: EventMode) {
         self.handle
             .update_counter(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_frozen_counter(&self, value: FfiFrozenCounter, mode: FfiEventMode) {
+    pub fn update_frozen_counter(&self, value: FrozenCounter, mode: EventMode) {
         self.handle
             .update_frozen_counter(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_analog(&self, value: FfiAnalog, mode: FfiEventMode) {
+    pub fn update_analog(&self, value: Analog, mode: EventMode) {
         self.handle
             .update_analog(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_analog_output_status(&self, value: FfiAnalogOutputStatus, mode: FfiEventMode) {
+    pub fn update_analog_output_status(&self, value: AnalogOutputStatus, mode: EventMode) {
         self.handle
             .update_analog_output_status(value.index, value.into_core(), mode.into());
     }
 
-    pub fn update_octet_string(&self, value: FfiOctetString, mode: FfiEventMode) {
+    pub fn update_octet_string(&self, value: OctetString, mode: EventMode) {
         self.handle
             .update_octet_string(value.index, value.into_core(), mode.into());
     }

@@ -10,12 +10,12 @@ import opendnp3 as dnp3
 
 T = TypeVar("T")
 
-SessionFactory = Callable[[dnp3.FfiBytePipe], Awaitable[T]]
+SessionFactory = Callable[[dnp3.BytePipe], Awaitable[T]]
 
 
 async def run_over_tcp(
     session: Awaitable[T],
-    pipe: dnp3.FfiBytePipe,
+    pipe: dnp3.BytePipe,
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
 ) -> T:
@@ -57,10 +57,10 @@ async def listen(
     port: int,
     session_factory: SessionFactory[T],
 ) -> asyncio.Server:
-    """Accept TCP clients and run one ``FfiBytePipe`` session per connection."""
+    """Accept TCP clients and run one ``BytePipe`` session per connection."""
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        pipe = dnp3.FfiBytePipe()
+        pipe = dnp3.BytePipe()
         try:
             await run_over_tcp(session_factory(pipe), pipe, reader, writer)
         finally:
@@ -78,7 +78,7 @@ async def connect(
     """Open one TCP client and run ``session_factory`` on its pipe."""
 
     reader, writer = await asyncio.open_connection(host, port)
-    pipe = dnp3.FfiBytePipe()
+    pipe = dnp3.BytePipe()
     task = asyncio.create_task(run_over_tcp(session_factory(pipe), pipe, reader, writer))
     return task, writer
 

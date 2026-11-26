@@ -2,7 +2,7 @@
 //!
 //! 100% Tokio-free: target languages implement [`Dnp3Stream`] using their own
 //! native async I/O (`asyncio`, C# `Task`/`Socket`, Java `NIO`/`Netty`, etc.)
-//! and poll [`FfiMaster::run`] / [`FfiOutstation::run`] directly.
+//! and poll [`Master::run`] / [`Outstation::run`] directly.
 
 #![recursion_limit = "256"]
 
@@ -14,8 +14,8 @@ pub mod outstation;
 pub mod pipe;
 pub mod types;
 
-pub use callbacks::{Dnp3Stream, FfiCommandHandler, FfiSoeHandler};
-pub use master::{FfiCommandSet, FfiMaster};
-pub use outstation::{FfiDatabaseConfig, FfiOutstation};
-pub use pipe::FfiBytePipe;
+pub use callbacks::{CommandHandler, Dnp3Stream, SoeHandler};
+pub use master::{CommandSet, Master};
+pub use outstation::{DatabaseConfig, Outstation};
+pub use pipe::BytePipe;
 pub use types::*;

@@ -1,8 +1,8 @@
-//! Channel-based byte pipe (`FfiBytePipe`) for targets where async foreign callback
+//! Channel-based byte pipe (`BytePipe`) for targets where async foreign callback
 //! traits are not supported (e.g. Python `asyncio` in BoltFFI 0.32.x).
 //!
 //! 100% Tokio-free and socket-free: target languages pump raw bytes between their
-//! own TCP/TLS/serial sockets and [`FfiBytePipe::push_rx`] / [`FfiBytePipe::next_tx`].
+//! own TCP/TLS/serial sockets and [`BytePipe::push_rx`] / [`BytePipe::next_tx`].
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use boltffi::export;
 use opendnp3::clock::MonotonicTime;
-use opendnp3::driver::{AsyncStream, StreamError, UnboundedReceiver, UnboundedSender, unbounded};
+use opendnp3::driver::{AsyncStream, UnboundedReceiver, UnboundedSender, unbounded};
 
 // ---- Minimal single-thread std timer (zero Tokio, zero external deps) ----
 
@@ -164,17 +164,17 @@ impl Future for StdSleep {
     }
 }
 
-// ---- Exported FfiBytePipe ----
+// ---- Exported BytePipe ----
 
-/// Bidirectional byte pipe for driving [`FfiMaster::run_with_pipe`] or
-/// [`FfiOutstation::run_with_pipe`] from any async runtime (such as Python `asyncio`).
+/// Bidirectional byte pipe for driving [`Master::run_with_pipe`] or
+/// [`Outstation::run_with_pipe`] from any async runtime (such as Python `asyncio`).
 ///
 /// The target language owns the TCP/TLS/serial socket:
 /// - Push received socket bytes via [`push_rx`](Self::push_rx).
 /// - Await outgoing DNP3 bytes via [`next_tx`](Self::next_tx) and write them to the socket.
 /// - Call [`close`](Self::close) on EOF or socket error.
 #[export]
-pub struct FfiBytePipe {
+pub struct BytePipe {
     origin: Instant,
     rx_tx: Mutex<Option<UnboundedSender<Vec<u8>>>>,
     rx_rx: UnboundedReceiver<Vec<u8>>,
@@ -183,7 +183,7 @@ pub struct FfiBytePipe {
 }
 
 #[export]
-impl FfiBytePipe {
+impl BytePipe {
     pub fn new() -> Self {
         let (rx_tx, rx_rx) = unbounded();
         let (tx_tx, tx_rx) = unbounded();
@@ -222,18 +222,18 @@ impl FfiBytePipe {
     }
 }
 
-impl Default for FfiBytePipe {
+impl Default for BytePipe {
     fn default() -> Self {
         Self::new()
     }
 }
 
 pub(crate) struct PipeStream<'a> {
-    pipe: &'a FfiBytePipe,
+    pipe: &'a BytePipe,
 }
 
 impl<'a> PipeStream<'a> {
-    pub(crate) fn new(pipe: &'a FfiBytePipe) -> Self {
+    pub(crate) fn new(pipe: &'a BytePipe) -> Self {
         Self { pipe }
     }
 }
@@ -246,15 +246,21 @@ impl Drop for PipeStream<'_> {
 }
 
 impl AsyncStream for PipeStream<'_> {
-    async fn read(&self, _max_bytes: usize) -> Result<Vec<u8>, StreamError> {
-        self.pipe.rx_rx.recv().await.ok_or(StreamError::Closed)
+    async fn read(&self, _max_bytes: usize) -> Result<Vec<u8>, opendnp3::driver::StreamError> {
+        self.pipe
+            .rx_rx
+            .recv()
+            .await
+            .ok_or(opendnp3::driver::StreamError::Closed)
     }
 
-    async fn write(&self, data: &[u8]) -> Result<(), StreamError> {
+    async fn write(&self, data: &[u8]) -> Result<(), opendnp3::driver::StreamError> {
         let guard = self.pipe.tx_tx.lock().unwrap();
         match guard.as_ref() {
-            Some(tx) => tx.send(data.to_vec()).map_err(|_| StreamError::Closed),
-            None => Err(StreamError::Closed),
+            Some(tx) => tx
+                .send(data.to_vec())
+                .map_err(|_| opendnp3::driver::StreamError::Closed),
+            None => Err(opendnp3::driver::StreamError::Closed),
         }
     }
 

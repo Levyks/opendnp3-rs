@@ -1,7 +1,7 @@
 package com.levyks.opendnp3.tcp;
 
 import com.levyks.opendnp3.Dnp3Stream;
-import com.levyks.opendnp3.FfiStreamError;
+import com.levyks.opendnp3.StreamError;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,14 +36,14 @@ final class TcpDnp3Stream implements Dnp3Stream {
                 byte[] buf = new byte[Math.min(Math.max(maxBytes, 1), 65536)];
                 int n = in.read(buf);
                 if (n <= 0) {
-                    future.completeExceptionally(FfiStreamError.Closed.INSTANCE);
+                    future.completeExceptionally(StreamError.Closed.INSTANCE);
                     return;
                 }
                 byte[] data = new byte[n];
                 System.arraycopy(buf, 0, data, 0, n);
                 future.complete(data);
             } catch (IOException ex) {
-                future.completeExceptionally(new FfiStreamError.Io(String.valueOf(ex.getMessage())));
+                future.completeExceptionally(new StreamError.Io(String.valueOf(ex.getMessage())));
             }
         });
         return future;
@@ -58,7 +58,7 @@ final class TcpDnp3Stream implements Dnp3Stream {
                 out.flush();
                 future.complete(null);
             } catch (IOException ex) {
-                future.completeExceptionally(new FfiStreamError.Io(String.valueOf(ex.getMessage())));
+                future.completeExceptionally(new StreamError.Io(String.valueOf(ex.getMessage())));
             }
         });
         return future;

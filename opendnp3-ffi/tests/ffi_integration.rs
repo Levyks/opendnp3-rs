@@ -1,5 +1,5 @@
 //! End-to-end Tokio-free integration test exercising the BoltFFI surface
-//! (`FfiMaster`, `FfiOutstation`, `Dnp3Stream`, `FfiSoeHandler`, `FfiCommandHandler`).
+//! (`Master`, `Outstation`, `Dnp3Stream`, `SoeHandler`, `CommandHandler`).
 
 use std::future::Future;
 use std::pin::pin;
@@ -11,12 +11,11 @@ use std::time::{Duration, Instant};
 use futures_util::future::join3;
 use opendnp3::driver::{UnboundedReceiver, UnboundedSender, unbounded};
 use opendnp3_ffi::{
-    Dnp3Stream, FfiAnalog, FfiAnalogOutputStatus, FfiBinary, FfiBinaryOutputStatus, FfiClassField,
-    FfiCommandHandler, FfiCommandSet, FfiCommandStatus, FfiCounter, FfiCrob, FfiDatabaseConfig,
-    FfiDnpTime, FfiDoubleBitBinary, FfiEventMode, FfiFrozenCounter, FfiLinkConfig, FfiMaster,
-    FfiMasterEvent, FfiMasterParams, FfiMasterTaskType, FfiOctetString, FfiOperateType,
-    FfiOperationType, FfiOutstation, FfiOutstationParams, FfiSoeHandler, FfiStreamError,
-    FfiTaskCompletion, FfiTimeSyncMode, FfiTimestampQuality, FfiTripCloseCode,
+    Analog, AnalogOutputStatus, Binary, BinaryOutputStatus, ClassField, CommandHandler, CommandSet,
+    CommandStatus, Counter, Crob, DatabaseConfig, Dnp3Stream, DnpTime, DoubleBitBinary, EventMode,
+    FrozenCounter, LinkConfig, Master, MasterEvent, MasterParams, MasterTaskType, OctetString,
+    OperateType, OperationType, Outstation, OutstationParams, SoeHandler, StreamError,
+    TaskCompletion, TimeSyncMode, TimestampQuality, TripCloseCode,
 };
 
 struct ThreadWaker(Thread);
@@ -41,20 +40,20 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-struct MockFfiStream {
+struct MockStream {
     origin: Instant,
     rx: UnboundedReceiver<Vec<u8>>,
     tx: UnboundedSender<Vec<u8>>,
 }
 
 #[async_trait::async_trait]
-impl Dnp3Stream for MockFfiStream {
-    async fn read(&self, _max_bytes: u32) -> Result<Vec<u8>, FfiStreamError> {
-        self.rx.recv().await.ok_or(FfiStreamError::Closed)
+impl Dnp3Stream for MockStream {
+    async fn read(&self, _max_bytes: u32) -> Result<Vec<u8>, StreamError> {
+        self.rx.recv().await.ok_or(StreamError::Closed)
     }
 
-    async fn write(&self, data: Vec<u8>) -> Result<(), FfiStreamError> {
-        self.tx.send(data).map_err(|_| FfiStreamError::Closed)
+    async fn write(&self, data: Vec<u8>) -> Result<(), StreamError> {
+        self.tx.send(data).map_err(|_| StreamError::Closed)
     }
 
     async fn sleep_ms(&self, duration_ms: u64) {
@@ -73,23 +72,23 @@ impl Dnp3Stream for MockFfiStream {
 
 #[derive(Default)]
 struct MockSoe {
-    binaries: Mutex<Vec<FfiBinary>>,
-    analogs: Mutex<Vec<FfiAnalog>>,
+    binaries: Mutex<Vec<Binary>>,
+    analogs: Mutex<Vec<Analog>>,
 }
 
-impl FfiSoeHandler for MockSoe {
-    fn on_binary(&self, values: Vec<FfiBinary>) {
+impl SoeHandler for MockSoe {
+    fn on_binary(&self, values: Vec<Binary>) {
         self.binaries.lock().unwrap().extend(values);
     }
-    fn on_double_bit(&self, _values: Vec<FfiDoubleBitBinary>) {}
-    fn on_binary_output_status(&self, _values: Vec<FfiBinaryOutputStatus>) {}
-    fn on_counter(&self, _values: Vec<FfiCounter>) {}
-    fn on_frozen_counter(&self, _values: Vec<FfiFrozenCounter>) {}
-    fn on_analog(&self, values: Vec<FfiAnalog>) {
+    fn on_double_bit(&self, _values: Vec<DoubleBitBinary>) {}
+    fn on_binary_output_status(&self, _values: Vec<BinaryOutputStatus>) {}
+    fn on_counter(&self, _values: Vec<Counter>) {}
+    fn on_frozen_counter(&self, _values: Vec<FrozenCounter>) {}
+    fn on_analog(&self, values: Vec<Analog>) {
         self.analogs.lock().unwrap().extend(values);
     }
-    fn on_analog_output_status(&self, _values: Vec<FfiAnalogOutputStatus>) {}
-    fn on_octet_string(&self, _values: Vec<FfiOctetString>) {}
+    fn on_analog_output_status(&self, _values: Vec<AnalogOutputStatus>) {}
+    fn on_octet_string(&self, _values: Vec<OctetString>) {}
 }
 
 #[derive(Default)]
@@ -97,42 +96,37 @@ struct MockCmd {
     operated_crobs: Mutex<Vec<u16>>,
 }
 
-impl FfiCommandHandler for MockCmd {
-    fn select_crob(&self, _command: FfiCrob, _index: u16) -> FfiCommandStatus {
-        FfiCommandStatus::Success
+impl CommandHandler for MockCmd {
+    fn select_crob(&self, _command: Crob, _index: u16) -> CommandStatus {
+        CommandStatus::Success
     }
-    fn operate_crob(
-        &self,
-        _command: FfiCrob,
-        index: u16,
-        _op_type: FfiOperateType,
-    ) -> FfiCommandStatus {
+    fn operate_crob(&self, _command: Crob, index: u16, _op_type: OperateType) -> CommandStatus {
         self.operated_crobs.lock().unwrap().push(index);
-        FfiCommandStatus::Success
+        CommandStatus::Success
     }
-    fn select_ao_i32(&self, _value: i32, _index: u16) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn select_ao_i32(&self, _value: i32, _index: u16) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn operate_ao_i32(&self, _value: i32, _index: u16, _op: FfiOperateType) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn operate_ao_i32(&self, _value: i32, _index: u16, _op: OperateType) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn select_ao_i16(&self, _value: i16, _index: u16) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn select_ao_i16(&self, _value: i16, _index: u16) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn operate_ao_i16(&self, _value: i16, _index: u16, _op: FfiOperateType) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn operate_ao_i16(&self, _value: i16, _index: u16, _op: OperateType) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn select_ao_f32(&self, _value: f32, _index: u16) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn select_ao_f32(&self, _value: f32, _index: u16) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn operate_ao_f32(&self, _value: f32, _index: u16, _op: FfiOperateType) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn operate_ao_f32(&self, _value: f32, _index: u16, _op: OperateType) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn select_ao_f64(&self, _value: f64, _index: u16) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn select_ao_f64(&self, _value: f64, _index: u16) -> CommandStatus {
+        CommandStatus::NotSupported
     }
-    fn operate_ao_f64(&self, _value: f64, _index: u16, _op: FfiOperateType) -> FfiCommandStatus {
-        FfiCommandStatus::NotSupported
+    fn operate_ao_f64(&self, _value: f64, _index: u16, _op: OperateType) -> CommandStatus {
+        CommandStatus::NotSupported
     }
 }
 
@@ -141,40 +135,40 @@ fn ffi_master_and_outstation_end_to_end() {
     let origin = Instant::now();
     let (a_tx, b_rx) = unbounded();
     let (b_tx, a_rx) = unbounded();
-    let m_stream = Arc::new(MockFfiStream {
+    let m_stream = Arc::new(MockStream {
         origin,
         rx: a_rx,
         tx: a_tx,
     });
-    let o_stream = Arc::new(MockFfiStream {
+    let o_stream = Arc::new(MockStream {
         origin,
         rx: b_rx,
         tx: b_tx,
     });
 
-    let all_classes = FfiClassField {
+    let all_classes = ClassField {
         class0: true,
         class1: true,
         class2: true,
         class3: true,
     };
-    let all_events = FfiClassField {
+    let all_events = ClassField {
         class0: false,
         class1: true,
         class2: true,
         class3: true,
     };
-    let no_classes = FfiClassField {
+    let no_classes = ClassField {
         class0: false,
         class1: false,
         class2: false,
         class3: false,
     };
 
-    let db = FfiDatabaseConfig::all_types(3);
+    let db = DatabaseConfig::all_types(3);
     let cmd_handler = Arc::new(MockCmd::default());
-    let outstation = Arc::new(FfiOutstation::new(
-        FfiLinkConfig {
+    let outstation = Arc::new(Outstation::new(
+        LinkConfig {
             is_master: false,
             local_addr: 10,
             remote_addr: 1,
@@ -182,7 +176,7 @@ fn ffi_master_and_outstation_end_to_end() {
             keep_alive_timeout_ms: 60_000,
             respond_to_any_source: false,
         },
-        FfiOutstationParams {
+        OutstationParams {
             max_tx_frag_size: 2048,
             max_rx_frag_size: 2048,
             allow_unsolicited: false,
@@ -200,33 +194,33 @@ fn ffi_master_and_outstation_end_to_end() {
     ));
 
     outstation.update_binary(
-        FfiBinary {
+        Binary {
             index: 0,
             value: true,
             flags: 0x81,
-            time: FfiDnpTime {
+            time: DnpTime {
                 value_ms: 0,
-                quality: FfiTimestampQuality::Invalid,
+                quality: TimestampQuality::Invalid,
             },
         },
-        FfiEventMode::Suppress,
+        EventMode::Suppress,
     );
     outstation.update_analog(
-        FfiAnalog {
+        Analog {
             index: 2,
             value: 999.0,
             flags: 0x01,
-            time: FfiDnpTime {
+            time: DnpTime {
                 value_ms: 0,
-                quality: FfiTimestampQuality::Invalid,
+                quality: TimestampQuality::Invalid,
             },
         },
-        FfiEventMode::Suppress,
+        EventMode::Suppress,
     );
 
     let soe = Arc::new(MockSoe::default());
-    let master = Arc::new(FfiMaster::new(
-        FfiLinkConfig {
+    let master = Arc::new(Master::new(
+        LinkConfig {
             is_master: true,
             local_addr: 1,
             remote_addr: 10,
@@ -234,9 +228,9 @@ fn ffi_master_and_outstation_end_to_end() {
             keep_alive_timeout_ms: 60_000,
             respond_to_any_source: false,
         },
-        FfiMasterParams {
+        MasterParams {
             response_timeout_ms: 5000,
-            time_sync_mode: FfiTimeSyncMode::None,
+            time_sync_mode: TimeSyncMode::None,
             disable_unsol_on_startup: false,
             ignore_restart_iin: false,
             unsol_class_mask: no_classes,
@@ -256,36 +250,36 @@ fn ffi_master_and_outstation_end_to_end() {
         while let Some(ev) = m_ref.next_event().await {
             if matches!(
                 ev,
-                FfiMasterEvent::TaskComplete {
-                    task_type: FfiMasterTaskType::StartupIntegrityPoll,
-                    result: FfiTaskCompletion::Success,
+                MasterEvent::TaskComplete {
+                    task_type: MasterTaskType::StartupIntegrityPoll,
+                    result: TaskCompletion::Success,
                 }
             ) {
                 break;
             }
         }
 
-        // Issue SBO CROB command via FfiCommandSet
-        let cs = FfiCommandSet::new();
+        // Issue SBO CROB command via CommandSet
+        let cs = CommandSet::new();
         cs.add_crob(
             1,
-            FfiCrob {
-                op_type: FfiOperationType::PulseOn,
-                tcc: FfiTripCloseCode::Close,
+            Crob {
+                op_type: OperationType::PulseOn,
+                tcc: TripCloseCode::Close,
                 clear: false,
                 count: 1,
                 on_time_ms: 100,
                 off_time_ms: 100,
-                status: FfiCommandStatus::Success,
+                status: CommandStatus::Success,
             },
         );
         m_ref.select_and_operate(&cs);
 
         while let Some(ev) = m_ref.next_event().await {
-            if let FfiMasterEvent::CommandComplete { result } = ev {
-                assert_eq!(result.summary, FfiTaskCompletion::Success);
+            if let MasterEvent::CommandComplete { result } = ev {
+                assert_eq!(result.summary, TaskCompletion::Success);
                 assert_eq!(result.points.len(), 1);
-                assert_eq!(result.points[0].status, FfiCommandStatus::Success);
+                assert_eq!(result.points[0].status, CommandStatus::Success);
                 break;
             }
         }

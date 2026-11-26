@@ -78,12 +78,12 @@ sealed class TcpDnp3Stream(NetworkStream stream) : Dnp3Stream
         {
             int n = await stream.ReadAsync(buf);
             if (n == 0)
-                throw new FfiStreamErrorException(new FfiStreamError.Closed());
+                throw new StreamErrorException(new StreamError.Closed());
             return buf[..n];
         }
         catch (IOException ex)
         {
-            throw new FfiStreamErrorException(new FfiStreamError.Io(ex.Message));
+            throw new StreamErrorException(new StreamError.Io(ex.Message));
         }
     }
 
@@ -96,7 +96,7 @@ sealed class TcpDnp3Stream(NetworkStream stream) : Dnp3Stream
         }
         catch (IOException ex)
         {
-            throw new FfiStreamErrorException(new FfiStreamError.Io(ex.Message));
+            throw new StreamErrorException(new StreamError.Io(ex.Message));
         }
     }
 
