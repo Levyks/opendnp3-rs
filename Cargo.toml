@@ -7,6 +7,7 @@ members = [
     "opendnp3-std",
     "opendnp3-embassy",
     "opendnp3-compio",
+    "opendnp3-ffi",
 ]
 
 [workspace.package]

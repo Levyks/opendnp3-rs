@@ -1,0 +1,18 @@
+[package]
+name = "opendnp3-ffi"
+description = "BoltFFI multi-language bindings (Python, C#, Java, Swift, Kotlin, TS) for opendnp3 (Tokio-free)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+async-trait = "0.1"
+boltffi = "0.32.1"
+opendnp3 = { path = "../opendnp3", features = ["async"] }
+
+[dev-dependencies]
+futures-util = "0.3"

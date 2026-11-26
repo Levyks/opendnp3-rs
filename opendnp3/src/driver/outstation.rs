@@ -158,9 +158,17 @@ macro_rules! impl_outstation_session_loop {
         );
 
         let mut shutdown_requested = false;
+        while let Some(cmd) = $cmd_rx.try_recv() {
+            if matches!(cmd, OutstationCommand::Shutdown) {
+                shutdown_requested = true;
+                break;
+            }
+            apply_outstation_command($outstation, cmd, $stream.now(), $app);
+        }
+
         let mut read_fut = Box::pin($stream.read(4096));
 
-        loop {
+        while !shutdown_requested {
             if flush_tx_inner!($stream, &mut link, &mut transport, $outstation, $app).is_err() {
                 break;
             }

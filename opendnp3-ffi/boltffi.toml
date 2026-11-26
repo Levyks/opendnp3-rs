@@ -1,0 +1,11 @@
+[package]
+name = "opendnp3"
+
+[targets.python]
+module_name = "opendnp3"
+
+[targets.csharp]
+namespace = "OpenDnp3"
+
+[targets.java]
+package = "io.opendnp3"
