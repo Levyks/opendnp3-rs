@@ -15,6 +15,7 @@ use opendnp3::outstation::{
 };
 
 use crate::callbacks::{CommandBridge, Dnp3Stream, FfiCommandHandler, StreamBridge};
+use crate::pipe::{FfiBytePipe, PipeStream};
 use crate::types::{
     FfiAnalog, FfiAnalogOutputStatus, FfiBinary, FfiBinaryOutputStatus, FfiCounter,
     FfiDoubleBitBinary, FfiEventClass, FfiEventMode, FfiFrozenCounter, FfiLinkConfig,
@@ -195,6 +196,31 @@ impl FfiOutstation {
         let mut app = DefaultOutstationApplication;
         run_outstation_session(
             &bridge,
+            self.link_cfg.clone(),
+            guard.value.as_mut().unwrap(),
+            &mut cmd_handler,
+            &mut app,
+            &self.cmd_rx,
+        )
+        .await
+    }
+
+    /// Drive a single connection using an [`FfiBytePipe`] (recommended for Python `asyncio`).
+    /// Returns `true` if `shutdown()` was called, `false` if the pipe closed.
+    pub async fn run_with_pipe(&self, pipe: &FfiBytePipe) -> bool {
+        let taken = self.outstation.lock().unwrap().take();
+        let Some(outstation) = taken else {
+            return false;
+        };
+        let mut guard = RestoreOnDrop {
+            slot: &self.outstation,
+            value: Some(outstation),
+        };
+        let stream = PipeStream::new(pipe);
+        let mut cmd_handler = CommandBridge(Arc::clone(&self.cmd_handler));
+        let mut app = DefaultOutstationApplication;
+        run_outstation_session(
+            &stream,
             self.link_cfg.clone(),
             guard.value.as_mut().unwrap(),
             &mut cmd_handler,

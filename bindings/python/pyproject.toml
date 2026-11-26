@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opendnp3-tcp"
+version = "0.1.0"
+description = "asyncio TCP transport for the opendnp3 BoltFFI bindings"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "levyks" }]
+dependencies = ["opendnp3==0.1.0"]
+keywords = ["dnp3", "opendnp3", "scada"]
+
+[project.urls]
+Homepage = "https://levyks.com"
+Repository = "https://github.com/levyks/opendnp3-rs"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["opendnp3_tcp*"]

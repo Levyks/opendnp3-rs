@@ -1,1 +1,10 @@
 /target
+/opendnp3-ffi/dist
+/opendnp3-ffi/jni_glue.*
+/opendnp3-ffi/examples/**/bin/
+/opendnp3-ffi/examples/**/obj/
+/bindings/java/**/target
+/bindings/csharp/**/bin
+/bindings/csharp/**/obj
+**/__pycache__/
+*.pyc

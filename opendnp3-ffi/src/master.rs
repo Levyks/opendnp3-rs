@@ -12,6 +12,7 @@ use opendnp3::link::{Addresses, LinkConfig};
 use opendnp3::master::{CommandSet, DefaultMasterApplication, Master, MasterEvent};
 
 use crate::callbacks::{Dnp3Stream, FfiSoeHandler, SoeBridge, StreamBridge};
+use crate::pipe::{FfiBytePipe, PipeStream};
 use crate::types::{
     FfiClassField, FfiCrob, FfiLinkConfig, FfiMasterEvent, FfiMasterParams, FfiPointClass,
     FfiRestartType, ao_f32, ao_f64, ao_i16, ao_i32, gv_from_raw, range_from_raw,
@@ -122,6 +123,32 @@ impl FfiMaster {
         let mut app = DefaultMasterApplication;
         run_master_session(
             &bridge,
+            self.link_cfg.clone(),
+            guard.value.as_mut().unwrap(),
+            &mut soe,
+            &mut app,
+            &self.cmd_rx,
+            &self.ev_tx,
+        )
+        .await
+    }
+
+    /// Drive a single connection using an [`FfiBytePipe`] (recommended for Python `asyncio`).
+    /// Returns `true` if `shutdown()` was called, `false` if the pipe closed.
+    pub async fn run_with_pipe(&self, pipe: &FfiBytePipe) -> bool {
+        let taken = self.master.lock().unwrap().take();
+        let Some(master) = taken else {
+            return false;
+        };
+        let mut guard = RestoreOnDrop {
+            slot: &self.master,
+            value: Some(master),
+        };
+        let stream = PipeStream::new(pipe);
+        let mut soe = SoeBridge(Arc::clone(&self.soe));
+        let mut app = DefaultMasterApplication;
+        run_master_session(
+            &stream,
             self.link_cfg.clone(),
             guard.value.as_mut().unwrap(),
             &mut soe,

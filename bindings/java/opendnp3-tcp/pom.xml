@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.levyks</groupId>
+    <artifactId>opendnp3-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>opendnp3-tcp</artifactId>
+  <name>opendnp3-tcp</name>
+  <description>java.net.Socket transport for com.levyks.opendnp3.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.levyks</groupId>
+      <artifactId>opendnp3</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,11 @@
+opendnp3-rs
+Copyright 2026 Levyks
+
+This product is dual-licensed under the MIT License and the Apache License,
+Version 2.0. You may use it under either license.
+
+The ported unit tests descend from the Apache-2.0 test suite in
+https://github.com/dnp3/opendnp3
+Copyright 2013-2022 Step Function I/O, LLC
+Licensed to Green Energy Corp and Step Function I/O LLC under the Apache
+License, Version 2.0.
