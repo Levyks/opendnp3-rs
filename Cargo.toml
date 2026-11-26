@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["opendnp3", "opendnp3-tokio"]
+members = [
+    "opendnp3",
+    "opendnp3-tokio",
+    "opendnp3-smol",
+    "opendnp3-std",
+    "opendnp3-embassy",
+    "opendnp3-compio",
+]
 
 [workspace.package]
 version = "0.1.0"

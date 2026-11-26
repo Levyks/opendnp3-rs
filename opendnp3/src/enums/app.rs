@@ -1,6 +1,6 @@
 //! Application-layer DNP3 enumerations (IEEE 1815).
 
-use std::fmt;
+use core::fmt;
 
 use super::dnp_enum;
 

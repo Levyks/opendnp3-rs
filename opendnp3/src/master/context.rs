@@ -1,7 +1,8 @@
 //! Runtime-agnostic DNP3 Master protocol state machine.
 
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
+use core::time::Duration;
 
 use super::command::CommandSet;
 use super::config::MasterParams;
@@ -15,6 +16,7 @@ use crate::app::{
     DoubleBitBinary, FrozenCounter, HeaderInfo, IinBit, IinField, Indexed, OctetString, ParseMode,
     Range, TimeAndInterval, parse_objects,
 };
+use crate::clock::MonotonicTime;
 use crate::enums::{
     CommandPointState, CommandStatus, FunctionCode, GroupVariation, MasterTaskType, PointClass,
     RestartType, TaskCompletion, TimeSyncMode,
@@ -47,7 +49,7 @@ enum ScanSpec {
 struct PeriodicScan {
     spec: ScanSpec,
     period: Duration,
-    next_run: Option<Instant>,
+    next_run: Option<MonotonicTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +68,7 @@ enum QueuedTask {
     },
     NonLanTimeSync {
         measured: bool,
-        start_time: Option<Instant>,
+        start_time: Option<MonotonicTime>,
     },
     LanTimeSync {
         recorded: bool,
@@ -115,7 +117,7 @@ pub struct Master {
     active_task: Option<QueuedTask>,
     task_queue: VecDeque<QueuedTask>,
     periodic_scans: Vec<PeriodicScan>,
-    response_deadline: Option<Instant>,
+    response_deadline: Option<MonotonicTime>,
 
     tx_queue: VecDeque<Message>,
     events: Vec<MasterEvent>,
@@ -143,7 +145,7 @@ impl Master {
     }
 
     pub fn drain_events(&mut self) -> Vec<MasterEvent> {
-        std::mem::take(&mut self.events)
+        core::mem::take(&mut self.events)
     }
 
     pub fn pop_transmit(&mut self) -> Option<Message> {
@@ -156,7 +158,7 @@ impl Master {
         !self.tx_queue.is_empty()
     }
 
-    pub fn next_wakeup(&self) -> Option<Instant> {
+    pub fn next_wakeup(&self) -> Option<MonotonicTime> {
         let mut earliest = self.response_deadline;
         if self.is_online {
             for scan in &self.periodic_scans {
@@ -173,7 +175,7 @@ impl Master {
 
     // ---- Periodic scans ----
 
-    pub fn add_class_scan(&mut self, classes: ClassField, period: Duration, now: Instant) {
+    pub fn add_class_scan(&mut self, classes: ClassField, period: Duration, now: MonotonicTime) {
         self.periodic_scans.push(PeriodicScan {
             spec: ScanSpec::Classes(classes),
             period,
@@ -190,7 +192,7 @@ impl Master {
         gv: GroupVariation,
         range: Range,
         period: Duration,
-        now: Instant,
+        now: MonotonicTime,
     ) {
         self.periodic_scans.push(PeriodicScan {
             spec: ScanSpec::Range(gv, range),
@@ -203,7 +205,12 @@ impl Master {
         });
     }
 
-    pub fn add_all_objects_scan(&mut self, gv: GroupVariation, period: Duration, now: Instant) {
+    pub fn add_all_objects_scan(
+        &mut self,
+        gv: GroupVariation,
+        period: Duration,
+        now: MonotonicTime,
+    ) {
         self.periodic_scans.push(PeriodicScan {
             spec: ScanSpec::AllObjects(gv),
             period,
@@ -217,7 +224,7 @@ impl Master {
 
     // ---- Lifecycle ----
 
-    pub fn on_lower_layer_up(&mut self, now: Instant, app: &mut dyn MasterApplication) {
+    pub fn on_lower_layer_up(&mut self, now: MonotonicTime, app: &mut dyn MasterApplication) {
         if self.is_online {
             return;
         }
@@ -246,7 +253,7 @@ impl Master {
         }
     }
 
-    pub fn on_tx_ready(&mut self, now: Instant, app: &mut dyn MasterApplication) {
+    pub fn on_tx_ready(&mut self, now: MonotonicTime, app: &mut dyn MasterApplication) {
         self.is_transmitting = false;
         // If active task is DirectOperateNoAck, complete immediately upon TX
         if matches!(
@@ -265,7 +272,7 @@ impl Master {
         self.try_start_next_task(now, app);
     }
 
-    pub fn on_timeout(&mut self, now: Instant, app: &mut dyn MasterApplication) {
+    pub fn on_timeout(&mut self, now: MonotonicTime, app: &mut dyn MasterApplication) {
         if let Some(deadline) = self.response_deadline
             && now >= deadline
         {
@@ -306,7 +313,7 @@ impl Master {
         &mut self,
         class: PointClass,
         gv: GroupVariation,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::AssignClass {
@@ -322,7 +329,7 @@ impl Master {
         class: PointClass,
         gv: GroupVariation,
         range: Range,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::AssignClass {
@@ -338,7 +345,7 @@ impl Master {
     pub fn scan_classes(
         &mut self,
         classes: ClassField,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         if !self.is_online {
@@ -358,7 +365,7 @@ impl Master {
         &mut self,
         gv: GroupVariation,
         range: Range,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::RangeScan(gv, range));
@@ -368,7 +375,7 @@ impl Master {
     pub fn scan_all_objects(
         &mut self,
         gv: GroupVariation,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::AllObjectsScan(gv));
@@ -378,7 +385,7 @@ impl Master {
     pub fn select_and_operate(
         &mut self,
         commands: CommandSet,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         if !self.is_online {
@@ -397,7 +404,7 @@ impl Master {
         &mut self,
         commands: CommandSet,
         no_ack: bool,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue
@@ -408,7 +415,7 @@ impl Master {
     pub fn restart(
         &mut self,
         restart_type: RestartType,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::Restart(restart_type));
@@ -418,7 +425,7 @@ impl Master {
     pub fn enable_unsolicited(
         &mut self,
         classes: ClassField,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::EnableUnsol(classes));
@@ -428,7 +435,7 @@ impl Master {
     pub fn disable_unsolicited(
         &mut self,
         classes: ClassField,
-        now: Instant,
+        now: MonotonicTime,
         app: &mut dyn MasterApplication,
     ) {
         self.task_queue.push_back(QueuedTask::DisableUnsol(classes));
@@ -440,7 +447,7 @@ impl Master {
     pub fn on_receive(
         &mut self,
         msg: &Message,
-        now: Instant,
+        now: MonotonicTime,
         soe: &mut dyn SoeHandler,
         app: &mut dyn MasterApplication,
     ) {
@@ -801,7 +808,7 @@ impl Master {
         self.task_queue.iter().any(pred)
     }
 
-    fn try_start_next_task(&mut self, now: Instant, app: &mut dyn MasterApplication) {
+    fn try_start_next_task(&mut self, now: MonotonicTime, app: &mut dyn MasterApplication) {
         if !self.is_online || self.active_task.is_some() || self.is_transmitting {
             return;
         }

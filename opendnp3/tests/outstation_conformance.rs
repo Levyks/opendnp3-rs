@@ -212,7 +212,7 @@ fn outstation_duplicate_request_replays_last_response() {
     };
     let mut o = Outstation::new(cfg, Addresses::new(10, 1));
     let mut cmd = DefaultCommandHandler;
-    let mut app = MockApp::default();
+    let mut app = DefaultOutstationApplication;
     o.on_lower_layer_up(clock.now(), &app);
 
     let r1 = send_hex(&mut o, &clock, "C0 01 01 02 06", &mut cmd, &mut app).unwrap();
@@ -348,7 +348,7 @@ fn outstation_discontiguous_indices_produce_separate_range_headers() {
     };
     let mut o = Outstation::new(cfg, Addresses::new(10, 1));
     let mut cmd = DefaultCommandHandler;
-    let mut app = MockApp::default();
+    let mut app = DefaultOutstationApplication;
     o.on_lower_layer_up(clock.now(), &app);
 
     o.database
@@ -489,7 +489,7 @@ fn outstation_count_limited_event_read_and_confirm_timeout_unselect() {
     };
     let mut o = Outstation::new(cfg, Addresses::new(10, 1));
     let mut cmd = DefaultCommandHandler;
-    let mut app = MockApp::default();
+    let mut app = DefaultOutstationApplication;
     o.on_lower_layer_up(clock.now(), &app);
 
     o.database
@@ -585,7 +585,7 @@ fn outstation_unsolicited_null_retry_and_disable_enable() {
     };
     let mut o = Outstation::new(cfg, Addresses::new(10, 1));
     let mut cmd = DefaultCommandHandler;
-    let mut app = MockApp::default();
+    let mut app = DefaultOutstationApplication;
     o.on_lower_layer_up(clock.now(), &app);
 
     // Null unsolicited sent on link up
@@ -608,7 +608,7 @@ fn outstation_unsolicited_null_retry_and_disable_enable() {
         FunctionCode::UnsolicitedResponse
     );
 
-    // Master confirms null unsolicited retry (FC=0x00, UNS=1, SEQ=1 -> 0xD1 0x00)
+    // Master confirms retried null unsolicited (FC=0x00, UNS=1, SEQ=1 -> 0xD1 0x00)
     let _ = send_hex(&mut o, &clock, "D1 00", &mut cmd, &mut app);
 
     // Disable unsolicited Class 1 -> event should NOT trigger unsolicited

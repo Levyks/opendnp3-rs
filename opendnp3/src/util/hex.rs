@@ -1,5 +1,8 @@
 //! Hex string helpers used in tests and logging.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use crate::error::ParseError;
 
 /// Decode a hex string like `"C0 DE 12"` or `"C0DE12"` into bytes.

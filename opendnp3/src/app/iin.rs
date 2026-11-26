@@ -106,14 +106,14 @@ impl IinField {
     }
 }
 
-impl std::ops::BitOr for IinField {
+impl core::ops::BitOr for IinField {
     type Output = Self;
     fn bitor(self, rhs: Self) -> Self::Output {
         self.union(rhs)
     }
 }
 
-impl std::ops::BitOrAssign for IinField {
+impl core::ops::BitOrAssign for IinField {
     fn bitor_assign(&mut self, rhs: Self) {
         self.lsb |= rhs.lsb;
         self.msb |= rhs.msb;

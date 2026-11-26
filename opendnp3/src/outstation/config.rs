@@ -1,7 +1,7 @@
 //! Outstation configuration structs.
 
-use std::collections::BTreeMap;
-use std::time::Duration;
+use alloc::collections::BTreeMap;
+use core::time::Duration;
 
 use crate::app::{ClassField, DEFAULT_MAX_APDU_SIZE};
 use crate::enums::{

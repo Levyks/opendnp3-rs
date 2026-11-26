@@ -1,5 +1,8 @@
 //! Master command set builder (CROB and Analog Output commands).
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::app::{
     AnalogOutputDouble64, AnalogOutputFloat32, AnalogOutputInt16, AnalogOutputInt32, ApduWriter,
     ControlRelayOutputBlock, Indexed,

@@ -1,6 +1,6 @@
 //! Link-layer configuration.
 
-use std::time::Duration;
+use core::time::Duration;
 
 /// Configuration for the DNP3 link layer.
 #[derive(Debug, Clone, PartialEq, Eq)]

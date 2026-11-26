@@ -1,5 +1,8 @@
 //! Streaming link-frame parser: resync, header validation, body CRC checks.
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use super::addresses::Addresses;
 use super::constants::*;
 use super::crc;

@@ -27,7 +27,7 @@ impl core::fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl core::error::Error for ParseError {}
 
 /// Errors produced while serializing into a fixed-size buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -44,4 +44,4 @@ impl core::fmt::Display for WriteError {
     }
 }
 
-impl std::error::Error for WriteError {}
+impl core::error::Error for WriteError {}

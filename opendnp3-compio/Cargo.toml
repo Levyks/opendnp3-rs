@@ -1,0 +1,14 @@
+[package]
+name = "opendnp3-compio"
+description = "compio completion-based (io_uring / IOCP) async runtime adapter for opendnp3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+compio = { version = "0.17", features = ["runtime", "time", "io"] }
+opendnp3 = { path = "../opendnp3", features = ["async"] }

@@ -1,5 +1,7 @@
 //! An addressed payload passed between protocol layers.
 
+use alloc::vec::Vec;
+
 use crate::link::Addresses;
 
 /// An addressed unit of user data (LSDU at the link layer, APDU at the

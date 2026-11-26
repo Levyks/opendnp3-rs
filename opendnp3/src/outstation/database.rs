@@ -1,6 +1,7 @@
 //! Outstation static database and change-detection engine.
 
-use std::collections::{BTreeMap, VecDeque};
+use alloc::collections::{BTreeMap, VecDeque};
+use alloc::vec::Vec;
 
 use super::config::{
     AnalogConfig, AnalogOutputStatusConfig, BinaryConfig, BinaryOutputStatusConfig, CounterConfig,
@@ -39,6 +40,10 @@ impl<V: Clone, C> StaticCell<V, C> {
 struct StaticSelection {
     gv: GroupVariation,
     indices: VecDeque<u16>,
+}
+
+fn abs_f64(x: f64) -> f64 {
+    if x < 0.0 { -x } else { x }
 }
 
 /// Holds all static measurement points and the associated [`EventBuffer`].
@@ -284,7 +289,7 @@ impl Database {
         let Some(cell) = self.analog.get_mut(&index) else {
             return false;
         };
-        let diff = (value.value - cell.last_event_value.value).abs();
+        let diff = abs_f64(value.value - cell.last_event_value.value);
         let is_event = match mode {
             EventMode::Force | EventMode::EventOnly => true,
             EventMode::Suppress => false,
@@ -315,7 +320,7 @@ impl Database {
         let Some(cell) = self.analog_output_status.get_mut(&index) else {
             return false;
         };
-        let diff = (value.value - cell.last_event_value.value).abs();
+        let diff = abs_f64(value.value - cell.last_event_value.value);
         let is_event = match mode {
             EventMode::Force | EventMode::EventOnly => true,
             EventMode::Suppress => false,

@@ -111,7 +111,7 @@ async fn tcp_master_and_outstation_end_to_end() {
 
     let binaries = Arc::new(Mutex::new(Vec::new()));
     let analogs = Arc::new(Mutex::new(Vec::new()));
-    let (m_handle, mut ev_rx) = spawn_tcp_master(
+    let (m_handle, ev_rx) = spawn_tcp_master(
         addr,
         m_link,
         MasterParams::default(),
@@ -257,7 +257,7 @@ async fn tcp_master_reconnecting_and_periodic_scan() {
 
     let (state_tx, mut state_rx) = tokio::sync::mpsc::unbounded_channel();
     let binaries = Arc::new(Mutex::new(Vec::new()));
-    let (m_handle, mut ev_rx) = spawn_tcp_master_reconnecting(
+    let (m_handle, ev_rx) = spawn_tcp_master_reconnecting(
         addr,
         m_link,
         MasterParams::default(),

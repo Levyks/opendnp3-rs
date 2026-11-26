@@ -1,6 +1,6 @@
 [package]
 name = "opendnp3"
-description = "Runtime-agnostic DNP3 (IEEE 1815) protocol library, a Rust rewrite of opendnp3"
+description = "Runtime-agnostic, no_std-compatible DNP3 (IEEE 1815) protocol library"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,5 +9,12 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["std"]
+std = ["tracing/std", "futures-util?/std"]
+async = ["dep:futures-util", "dep:spin"]
+
 [dependencies]
-tracing = "0.1"
+tracing = { version = "0.1", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
+spin = { version = "0.10", default-features = false, features = ["spin_mutex"], optional = true }

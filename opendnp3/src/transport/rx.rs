@@ -1,5 +1,8 @@
 //! Transport receive: TPDU -> APDU reassembly.
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use super::{TransportHeader, TransportSeqNum};
 use crate::link::Addresses;
 use crate::message::Message;

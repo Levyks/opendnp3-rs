@@ -1,0 +1,14 @@
+[package]
+name = "opendnp3-smol"
+description = "smol async runtime adapter for the opendnp3 crate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+opendnp3 = { path = "../opendnp3", features = ["async"] }
+smol = "2"

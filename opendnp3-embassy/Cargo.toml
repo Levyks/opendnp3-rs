@@ -1,0 +1,21 @@
+[package]
+name = "opendnp3-embassy"
+description = "no_std Embassy async runtime adapter for the opendnp3 crate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+embedded-io-async = "0.6"
+embassy-sync = "0.7"
+embassy-time = "0.5"
+opendnp3 = { path = "../opendnp3", default-features = false, features = ["async"] }
+
+[dev-dependencies]
+critical-section = { version = "1", features = ["std"] }
+embassy-time = { version = "0.5", features = ["std", "generic-queue-8"] }
+futures-util = "0.3"

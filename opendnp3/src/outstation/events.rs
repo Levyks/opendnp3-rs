@@ -1,7 +1,7 @@
 //! Chronological outstation event buffer with per-type limits, overflow
 //! tracking, class/type selection, and confirm-based clearing.
 
-use std::collections::VecDeque;
+use alloc::collections::VecDeque;
 
 use super::config::EventBufferConfig;
 use crate::app::{

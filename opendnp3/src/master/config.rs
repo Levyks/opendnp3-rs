@@ -1,6 +1,6 @@
 //! Master configuration parameters.
 
-use std::time::Duration;
+use core::time::Duration;
 
 use crate::app::{ClassField, DEFAULT_MAX_APDU_SIZE};
 use crate::enums::TimeSyncMode;

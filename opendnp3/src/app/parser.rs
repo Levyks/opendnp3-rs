@@ -1,5 +1,7 @@
 //! APDU object-header and payload parser.
 
+use alloc::vec::Vec;
+
 use super::header::{HeaderInfo, ObjectHeader, Range};
 use super::iin::{IinBit, IinField};
 use super::measurement::{

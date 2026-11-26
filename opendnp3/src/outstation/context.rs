@@ -1,7 +1,7 @@
 //! Runtime-agnostic DNP3 Outstation protocol state machine.
 
-use std::collections::VecDeque;
-use std::time::Instant;
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 
 use super::config::OutstationConfig;
 use super::database::Database;
@@ -12,6 +12,7 @@ use crate::app::{
     ApduHeader, ApduWriter, AppControlField, AppSeqNum, ClassField, ControlRelayOutputBlock,
     DnpTime, HeaderInfo, IinBit, IinField, Indexed, ParseMode, Range, parse_objects,
 };
+use crate::clock::MonotonicTime;
 use crate::enums::{
     CommandStatus, EventClass, FunctionCode, GroupVariation, OperateType, QualifierCode,
     RestartMode,
@@ -30,7 +31,7 @@ enum State {
 #[derive(Debug, Clone)]
 struct PendingSelect {
     seq: u8,
-    expires_at: Instant,
+    expires_at: MonotonicTime,
     objects: Vec<u8>,
 }
 
@@ -64,8 +65,8 @@ pub struct Outstation {
     unsol_enabled: ClassField,
 
     // Timers
-    confirm_deadline: Option<Instant>,
-    unsol_retry_deadline: Option<Instant>,
+    confirm_deadline: Option<MonotonicTime>,
+    unsol_retry_deadline: Option<MonotonicTime>,
 
     // SBO tracking
     pending_select: Option<PendingSelect>,
@@ -123,7 +124,7 @@ impl Outstation {
         !self.tx_queue.is_empty()
     }
 
-    pub fn next_wakeup(&self) -> Option<Instant> {
+    pub fn next_wakeup(&self) -> Option<MonotonicTime> {
         match (self.confirm_deadline, self.unsol_retry_deadline) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (Some(a), None) | (None, Some(a)) => Some(a),
@@ -131,7 +132,7 @@ impl Outstation {
         }
     }
 
-    pub fn on_lower_layer_up(&mut self, now: Instant, app: &dyn OutstationApplication) {
+    pub fn on_lower_layer_up(&mut self, now: MonotonicTime, app: &dyn OutstationApplication) {
         if self.is_online {
             return;
         }
@@ -150,18 +151,18 @@ impl Outstation {
         self.database.clear_static_selections();
     }
 
-    pub fn on_tx_ready(&mut self, now: Instant, app: &dyn OutstationApplication) {
+    pub fn on_tx_ready(&mut self, now: MonotonicTime, app: &dyn OutstationApplication) {
         self.is_transmitting = false;
         self.check_unsolicited(now, app);
     }
 
     /// Notify the outstation that measurements/events were updated so it can
     /// trigger an unsolicited response if enabled.
-    pub fn check_for_task_start(&mut self, now: Instant, app: &dyn OutstationApplication) {
+    pub fn check_for_task_start(&mut self, now: MonotonicTime, app: &dyn OutstationApplication) {
         self.check_unsolicited(now, app);
     }
 
-    pub fn on_timeout(&mut self, now: Instant, app: &dyn OutstationApplication) {
+    pub fn on_timeout(&mut self, now: MonotonicTime, app: &dyn OutstationApplication) {
         if let Some(deadline) = self.confirm_deadline
             && now >= deadline
         {
@@ -195,7 +196,7 @@ impl Outstation {
     pub fn on_receive(
         &mut self,
         msg: &Message,
-        now: Instant,
+        now: MonotonicTime,
         cmd_handler: &mut dyn CommandHandler,
         app: &mut dyn OutstationApplication,
     ) {
@@ -320,7 +321,7 @@ impl Outstation {
     fn handle_confirm(
         &mut self,
         ctrl: AppControlField,
-        now: Instant,
+        now: MonotonicTime,
         app: &dyn OutstationApplication,
     ) {
         match self.state {
@@ -364,7 +365,7 @@ impl Outstation {
     fn handle_read(
         &mut self,
         objects: &[u8],
-        now: Instant,
+        now: MonotonicTime,
         app: &dyn OutstationApplication,
     ) -> Vec<u8> {
         self.database.events.unselect_all();
@@ -390,7 +391,7 @@ impl Outstation {
     fn build_read_fragment(
         &mut self,
         fir: bool,
-        now: Instant,
+        now: MonotonicTime,
         app: &dyn OutstationApplication,
     ) -> Vec<u8> {
         let mut writer = ApduWriter::new_response(
@@ -446,7 +447,7 @@ impl Outstation {
         &mut self,
         objects: &[u8],
         seq: u8,
-        now: Instant,
+        now: MonotonicTime,
         cmd_handler: &mut dyn CommandHandler,
         app: &dyn OutstationApplication,
     ) -> Vec<u8> {
@@ -483,7 +484,7 @@ impl Outstation {
         &mut self,
         objects: &[u8],
         seq: u8,
-        now: Instant,
+        now: MonotonicTime,
         cmd_handler: &mut dyn CommandHandler,
         app: &dyn OutstationApplication,
     ) -> Vec<u8> {
@@ -652,7 +653,7 @@ impl Outstation {
 
     // ---- Unsolicited engine ----
 
-    fn check_unsolicited(&mut self, now: Instant, app: &dyn OutstationApplication) {
+    fn check_unsolicited(&mut self, now: MonotonicTime, app: &dyn OutstationApplication) {
         if !self.is_online
             || !self.config.params.allow_unsolicited
             || self.state != State::Idle

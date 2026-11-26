@@ -1,5 +1,7 @@
 //! DNP3 measurement types, flags, timestamps, and control blocks.
 
+use alloc::vec::Vec;
+
 use crate::enums::{
     AnalogOutputStatusQuality, AnalogQuality, BinaryOutputStatusQuality, BinaryQuality,
     CommandStatus, CounterQuality, DoubleBit, DoubleBitBinaryQuality, FrozenCounterQuality,

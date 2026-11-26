@@ -1,10 +1,12 @@
 //! Transport layer glue between the link layer and the application layer.
 
-use std::time::Instant;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 use super::rx::TransportRx;
 use super::tx::TransportTx;
 use super::{MAX_TPDU_PAYLOAD, TransportSeqNum};
+use crate::clock::MonotonicTime;
 use crate::link::{LinkEvent, LinkLayer};
 use crate::message::Message;
 
@@ -51,11 +53,16 @@ impl TransportLayer {
 
     /// Drain events produced since the last call.
     pub fn drain_events(&mut self) -> Vec<TransportEvent> {
-        std::mem::take(&mut self.events)
+        core::mem::take(&mut self.events)
     }
 
     /// Begin transmitting an APDU through the link layer.
-    pub fn begin_transmit(&mut self, message: Message, link: &mut LinkLayer, now: Instant) -> bool {
+    pub fn begin_transmit(
+        &mut self,
+        message: Message,
+        link: &mut LinkLayer,
+        now: MonotonicTime,
+    ) -> bool {
         if !self.is_online {
             tracing::error!("transport layer offline");
             return false;

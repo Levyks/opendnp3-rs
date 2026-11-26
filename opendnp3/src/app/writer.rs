@@ -1,5 +1,7 @@
 //! APDU serialization and object/header writing with mark/rollback support.
 
+use alloc::vec::Vec;
+
 use super::control::AppControlField;
 use super::header::{ApduHeader, ApduResponseHeader, GroupVariationId, Range};
 use super::iin::IinField;

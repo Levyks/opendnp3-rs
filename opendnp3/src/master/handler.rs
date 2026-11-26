@@ -1,5 +1,7 @@
 //! Master callback traits (`SoeHandler`, `MasterApplication`).
 
+use alloc::vec::Vec;
+
 use crate::app::{
     Analog, AnalogOutputStatus, Binary, BinaryOutputStatus, Counter, DnpTime, DoubleBitBinary,
     FrozenCounter, HeaderInfo, IinField, Indexed, OctetString, TimeAndInterval,

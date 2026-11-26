@@ -5,13 +5,17 @@
 //! [`LinkEvent`]s for the layer above, and pop serialized frames for the
 //! channel below. No I/O or clock access happens inside.
 
-use std::time::{Duration, Instant};
+use alloc::boxed::Box;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::time::Duration;
 
 use super::addresses::Addresses;
 use super::config::LinkConfig;
 use super::constants::*;
 use super::frame;
 use super::parser::LinkHeaderFields;
+use crate::clock::MonotonicTime;
 use crate::enums::LinkStatus;
 use crate::message::Message;
 use crate::util::WriteCursor;
@@ -97,9 +101,9 @@ pub struct LinkLayer {
     keep_alive_timeout: bool,
 
     // timers
-    rsp_deadline: Option<Instant>,
-    keep_alive_deadline: Option<Instant>,
-    last_message_timestamp: Instant,
+    rsp_deadline: Option<MonotonicTime>,
+    keep_alive_deadline: Option<MonotonicTime>,
+    last_message_timestamp: MonotonicTime,
 
     // transmit path
     segments: Option<Box<dyn TransportSegment>>,
@@ -123,7 +127,7 @@ impl LinkLayer {
             keep_alive_timeout: false,
             rsp_deadline: None,
             keep_alive_deadline: None,
-            last_message_timestamp: Instant::now(),
+            last_message_timestamp: MonotonicTime::ZERO,
             segments: None,
             pending_pri_tx: None,
             pending_sec_tx: None,
@@ -139,12 +143,12 @@ impl LinkLayer {
 
     /// Drain events generated since the last call.
     pub fn drain_events(&mut self) -> Vec<LinkEvent> {
-        std::mem::take(&mut self.events)
+        core::mem::take(&mut self.events)
     }
 
     /// Next timer deadline, if any. The driver should call
     /// [`on_timeout`](Self::on_timeout) at this time.
-    pub fn next_wakeup(&self) -> Option<Instant> {
+    pub fn next_wakeup(&self) -> Option<MonotonicTime> {
         match (self.rsp_deadline, self.keep_alive_deadline) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (Some(a), None) => Some(a),
@@ -167,7 +171,7 @@ impl LinkLayer {
 
     // ---- events from below ----
 
-    pub fn on_lower_layer_up(&mut self, now: Instant) -> bool {
+    pub fn on_lower_layer_up(&mut self, now: MonotonicTime) -> bool {
         if self.is_online {
             tracing::error!("link layer already online");
             return false;
@@ -224,7 +228,12 @@ impl LinkLayer {
     }
 
     /// A validated frame arrived from the parser.
-    pub fn on_frame(&mut self, header: &LinkHeaderFields, userdata: &[u8], now: Instant) -> bool {
+    pub fn on_frame(
+        &mut self,
+        header: &LinkHeaderFields,
+        userdata: &[u8],
+        now: MonotonicTime,
+    ) -> bool {
         if !self.is_online {
             tracing::error!("link layer is not online");
             return false;
@@ -293,7 +302,7 @@ impl LinkLayer {
     // ---- events from above ----
 
     /// Queue a transport-segment producer for transmission.
-    pub fn send(&mut self, segments: Box<dyn TransportSegment>, now: Instant) -> bool {
+    pub fn send(&mut self, segments: Box<dyn TransportSegment>, now: MonotonicTime) -> bool {
         if !self.is_online {
             tracing::error!("link layer is not online");
             return false;
@@ -308,7 +317,7 @@ impl LinkLayer {
     }
 
     /// Timer driver: call when [`next_wakeup`](Self::next_wakeup) is reached.
-    pub fn on_timeout(&mut self, now: Instant) {
+    pub fn on_timeout(&mut self, now: MonotonicTime) {
         if let Some(deadline) = self.rsp_deadline
             && now >= deadline
         {
@@ -399,7 +408,7 @@ impl LinkLayer {
         self.queue_transmit(buf.to_vec(), true);
     }
 
-    fn try_start_transmission(&mut self, now: Instant) {
+    fn try_start_transmission(&mut self, now: MonotonicTime) {
         if self.keep_alive_timeout {
             self.pri_try_send_request_link_status(now);
         }
@@ -408,7 +417,7 @@ impl LinkLayer {
         }
     }
 
-    fn on_keep_alive_timeout(&mut self, now: Instant) {
+    fn on_keep_alive_timeout(&mut self, now: MonotonicTime) {
         let elapsed = now.saturating_duration_since(self.last_message_timestamp);
         if elapsed >= self.config.keep_alive_timeout {
             self.keep_alive_timeout = true;
@@ -417,16 +426,16 @@ impl LinkLayer {
         self.try_start_transmission(now);
     }
 
-    fn on_response_timeout(&mut self, now: Instant) {
+    fn on_response_timeout(&mut self, now: MonotonicTime) {
         self.pri_on_timeout();
         self.try_start_transmission(now);
     }
 
-    fn start_response_timer(&mut self, now: Instant) {
+    fn start_response_timer(&mut self, now: MonotonicTime) {
         self.rsp_deadline = Some(now + self.config.timeout);
     }
 
-    fn restart_keep_alive_timer(&mut self, now: Instant) {
+    fn restart_keep_alive_timer(&mut self, now: MonotonicTime) {
         self.last_message_timestamp = now;
         if self.config.keep_alive_timeout != Duration::MAX {
             self.keep_alive_deadline = Some(now + self.config.keep_alive_timeout);
@@ -582,7 +591,7 @@ impl LinkLayer {
         self.pri_state = PriState::SendUnconfirmedTransmitWait;
     }
 
-    fn pri_try_send_request_link_status(&mut self, now: Instant) {
+    fn pri_try_send_request_link_status(&mut self, now: MonotonicTime) {
         if self.pri_state != PriState::Idle {
             return;
         }
