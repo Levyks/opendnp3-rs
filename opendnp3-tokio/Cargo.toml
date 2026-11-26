@@ -1,0 +1,17 @@
+[package]
+name = "opendnp3-tokio"
+description = "Tokio transport integration (TCP, TLS, serial) for the opendnp3 crate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+opendnp3 = { path = "../opendnp3" }
+tokio = { version = "1", features = ["net", "time", "io-util", "sync", "rt"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
