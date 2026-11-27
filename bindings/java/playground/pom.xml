@@ -7,11 +7,15 @@
   <parent>
     <groupId>com.levyks</groupId>
     <artifactId>opendnp3-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
   </parent>
 
   <artifactId>opendnp3-playground</artifactId>
   <name>opendnp3-playground</name>
+
+  <properties>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
 
   <dependencies>
     <dependency>
