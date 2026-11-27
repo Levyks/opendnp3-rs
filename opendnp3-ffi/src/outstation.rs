@@ -261,3 +261,144 @@ impl Outstation {
         self.handle.shutdown();
     }
 }
+
+#[cfg(feature = "smol-tcp")]
+#[export]
+impl Outstation {
+    /// Standard DNP3 TCP server: accept master connections on `listener` in a loop until
+    /// [`shutdown`](Self::shutdown) is called. Zero per-packet FFI hops.
+    pub async fn run_tcp_server(
+        &self,
+        listener: &crate::tcp::TcpListener,
+    ) -> Result<bool, crate::types::StreamError> {
+        let taken = self.outstation.lock().unwrap().take();
+        let Some(outstation) = taken else {
+            return Ok(false);
+        };
+        let mut guard = RestoreOnDrop {
+            slot: &self.outstation,
+            value: Some(outstation),
+        };
+        let mut cmd_handler = CommandBridge(Arc::clone(&self.cmd_handler));
+        let mut app = opendnp3::outstation::DefaultOutstationApplication;
+        let origin = std::time::Instant::now();
+
+        loop {
+            let accept_or_cmd =
+                futures_lite::future::or(async { Ok(listener.accept().await) }, async {
+                    Err(self.cmd_rx.recv().await)
+                })
+                .await;
+            match accept_or_cmd {
+                Ok(Ok(tcp)) => {
+                    let stream = crate::tcp::SmolTcpStream::new(tcp);
+                    let shutdown = run_outstation_session(
+                        &stream,
+                        self.link_cfg.clone(),
+                        guard.value.as_mut().unwrap(),
+                        &mut cmd_handler,
+                        &mut app,
+                        &self.cmd_rx,
+                    )
+                    .await;
+                    if shutdown {
+                        return Ok(true);
+                    }
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(Some(OutstationCommand::Shutdown)) | Err(None) => return Ok(true),
+                Err(Some(other)) => {
+                    opendnp3::driver::apply_outstation_command(
+                        guard.value.as_mut().unwrap(),
+                        other,
+                        opendnp3::clock::MonotonicTime::from_elapsed(origin),
+                        &app,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Reverse TCP: dial `host:port` over Rust-managed TCP and reconnect with exponential backoff
+    /// until [`shutdown`](Self::shutdown) is called.
+    pub async fn run_tcp_client(
+        &self,
+        host: String,
+        port: u16,
+        min_retry_ms: u64,
+        max_retry_ms: u64,
+    ) -> bool {
+        let taken = self.outstation.lock().unwrap().take();
+        let Some(outstation) = taken else {
+            return false;
+        };
+        let mut guard = RestoreOnDrop {
+            slot: &self.outstation,
+            value: Some(outstation),
+        };
+        let mut cmd_handler = CommandBridge(Arc::clone(&self.cmd_handler));
+        let mut app = opendnp3::outstation::DefaultOutstationApplication;
+        let origin = std::time::Instant::now();
+        let min_delay = std::time::Duration::from_millis(min_retry_ms.max(10));
+        let max_delay = std::time::Duration::from_millis(max_retry_ms.max(min_retry_ms.max(10)));
+        let mut delay = min_delay;
+
+        loop {
+            let connect_or_cmd = futures_lite::future::or(
+                async { Ok(crate::tcp::SmolTcpStream::connect(&host, port).await) },
+                async { Err(self.cmd_rx.recv().await) },
+            )
+            .await;
+
+            match connect_or_cmd {
+                Ok(Ok(stream)) => {
+                    delay = min_delay;
+                    let shutdown = run_outstation_session(
+                        &stream,
+                        self.link_cfg.clone(),
+                        guard.value.as_mut().unwrap(),
+                        &mut cmd_handler,
+                        &mut app,
+                        &self.cmd_rx,
+                    )
+                    .await;
+                    if shutdown {
+                        return true;
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(Some(OutstationCommand::Shutdown)) | Err(None) => return true,
+                Err(Some(other)) => {
+                    opendnp3::driver::apply_outstation_command(
+                        guard.value.as_mut().unwrap(),
+                        other,
+                        opendnp3::clock::MonotonicTime::from_elapsed(origin),
+                        &app,
+                    );
+                    continue;
+                }
+            }
+
+            let sleep_or_cmd = futures_lite::future::or(
+                async {
+                    async_io::Timer::after(delay).await;
+                    Ok(())
+                },
+                async { Err(self.cmd_rx.recv().await) },
+            )
+            .await;
+            match sleep_or_cmd {
+                Ok(()) => delay = (delay * 2).min(max_delay),
+                Err(Some(OutstationCommand::Shutdown)) | Err(None) => return true,
+                Err(Some(other)) => {
+                    opendnp3::driver::apply_outstation_command(
+                        guard.value.as_mut().unwrap(),
+                        other,
+                        opendnp3::clock::MonotonicTime::from_elapsed(origin),
+                        &app,
+                    );
+                }
+            }
+        }
+    }
+}

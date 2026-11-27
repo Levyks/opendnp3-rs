@@ -10,9 +10,16 @@ publish = false
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
+[features]
+default = ["smol-tcp"]
+smol-tcp = ["dep:async-io", "dep:async-net", "dep:futures-lite"]
+
 [dependencies]
+async-io = { version = "2", optional = true }
+async-net = { version = "2", optional = true }
 async-trait = "0.1"
 boltffi = { git = "https://github.com/Levyks/boltffi.git", branch = "feat/csharp-net-framework" }
+futures-lite = { version = "2", optional = true }
 opendnp3 = { path = "../opendnp3", features = ["async"] }
 
 [dev-dependencies]

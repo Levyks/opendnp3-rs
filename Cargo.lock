@@ -1116,8 +1116,11 @@ dependencies = [
 name = "opendnp3-ffi"
 version = "0.1.1"
 dependencies = [
+ "async-io",
+ "async-net",
  "async-trait",
  "boltffi",
+ "futures-lite",
  "futures-util",
  "opendnp3",
 ]

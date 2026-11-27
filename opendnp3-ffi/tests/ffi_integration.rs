@@ -310,3 +310,133 @@ fn ffi_master_and_outstation_end_to_end() {
     );
     assert_eq!(*cmd_handler.operated_crobs.lock().unwrap(), vec![1]);
 }
+
+#[cfg(feature = "smol-tcp")]
+#[test]
+fn ffi_smol_tcp_master_and_outstation_end_to_end() {
+    use opendnp3_ffi::TcpListener;
+
+    let all_classes = ClassField {
+        class0: true,
+        class1: true,
+        class2: true,
+        class3: true,
+    };
+    let all_events = ClassField {
+        class0: false,
+        class1: true,
+        class2: true,
+        class3: true,
+    };
+    let no_classes = ClassField {
+        class0: false,
+        class1: false,
+        class2: false,
+        class3: false,
+    };
+
+    let db = DatabaseConfig::all_types(3);
+    let cmd_handler = Arc::new(MockCmd::default());
+    let outstation = Arc::new(Outstation::new(
+        LinkConfig {
+            is_master: false,
+            local_addr: 10,
+            remote_addr: 1,
+            timeout_ms: 1000,
+            keep_alive_timeout_ms: 60_000,
+            respond_to_any_source: false,
+        },
+        OutstationParams {
+            max_tx_frag_size: 2048,
+            max_rx_frag_size: 2048,
+            allow_unsolicited: false,
+            sol_confirm_timeout_ms: 5000,
+            unsol_confirm_timeout_ms: 5000,
+            unsol_retry_delay_ms: 5000,
+            select_timeout_ms: 10_000,
+            max_controls_per_request: 16,
+            unsol_class_mask: all_events,
+            respond_to_any_master: false,
+            event_buffer_size_per_type: 10,
+        },
+        &db,
+        cmd_handler.clone(),
+    ));
+
+    outstation.update_analog(
+        Analog {
+            index: 2,
+            value: 420.0,
+            flags: 0x01,
+            time: DnpTime {
+                value_ms: 0,
+                quality: TimestampQuality::Invalid,
+            },
+        },
+        EventMode::Suppress,
+    );
+
+    let soe = Arc::new(MockSoe::default());
+    let master = Arc::new(Master::new(
+        LinkConfig {
+            is_master: true,
+            local_addr: 1,
+            remote_addr: 10,
+            timeout_ms: 1000,
+            keep_alive_timeout_ms: 60_000,
+            respond_to_any_source: false,
+        },
+        MasterParams {
+            response_timeout_ms: 5000,
+            time_sync_mode: TimeSyncMode::None,
+            disable_unsol_on_startup: false,
+            ignore_restart_iin: false,
+            unsol_class_mask: no_classes,
+            startup_integrity_class_mask: all_classes,
+            integrity_on_event_overflow_iin: true,
+            event_scan_on_events_available_class_mask: no_classes,
+            max_tx_frag_size: 2048,
+            max_rx_frag_size: 2048,
+        },
+        soe.clone(),
+    ));
+
+    block_on(async {
+        let listener = TcpListener::bind("127.0.0.1".into(), 0).await.unwrap();
+        let port = listener.port();
+        let m_ref = master.clone();
+        let o_ref = outstation.clone();
+        let driver = async move {
+            while let Some(ev) = m_ref.next_event().await {
+                if matches!(
+                    ev,
+                    MasterEvent::TaskComplete {
+                        task_type: MasterTaskType::StartupIntegrityPoll,
+                        result: TaskCompletion::Success,
+                    }
+                ) {
+                    break;
+                }
+            }
+            m_ref.shutdown();
+            o_ref.shutdown();
+        };
+
+        let (m_res, o_res, ()) = join3(
+            master.run_tcp("127.0.0.1".into(), port),
+            outstation.run_tcp_server(&listener),
+            driver,
+        )
+        .await;
+        assert_eq!(m_res, Ok(true));
+        assert_eq!(o_res, Ok(true));
+    });
+
+    assert!(
+        soe.analogs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|a| a.index == 2 && (a.value - 420.0).abs() < 1e-6)
+    );
+}

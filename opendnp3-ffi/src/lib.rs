@@ -12,10 +12,14 @@ pub mod callbacks;
 pub mod master;
 pub mod outstation;
 pub mod pipe;
+#[cfg(feature = "smol-tcp")]
+pub mod tcp;
 pub mod types;
 
 pub use callbacks::{CommandHandler, Dnp3Stream, SoeHandler};
 pub use master::{CommandSet, Master};
 pub use outstation::{DatabaseConfig, Outstation};
 pub use pipe::BytePipe;
+#[cfg(feature = "smol-tcp")]
+pub use tcp::TcpListener;
 pub use types::*;
