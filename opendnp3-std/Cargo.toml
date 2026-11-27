@@ -12,4 +12,4 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-opendnp3 = { version = "0.1.1", path = "../opendnp3" }
+opendnp3 = { version = "0.1.2", path = "../opendnp3" }

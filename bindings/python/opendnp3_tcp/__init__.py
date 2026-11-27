@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import ssl as _ssl
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -63,8 +64,10 @@ async def listen(
     host: str,
     port: int,
     session_factory: SessionFactory[T],
+    *,
+    ssl: _ssl.SSLContext | None = None,
 ) -> asyncio.Server:
-    """Accept TCP clients and run one ``BytePipe`` session per connection."""
+    """Accept TCP (or TLS when ``ssl`` is provided) clients and run one ``BytePipe`` session per connection."""
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         pipe = dnp3.BytePipe()
@@ -74,20 +77,60 @@ async def listen(
             writer.close()
             await writer.wait_closed()
 
-    return await asyncio.start_server(handle, host, port)
+    return await asyncio.start_server(handle, host, port, ssl=ssl)
 
 
 async def connect(
     host: str,
     port: int,
     session_factory: SessionFactory[T],
+    *,
+    ssl: _ssl.SSLContext | bool | None = None,
+    server_hostname: str | None = None,
 ) -> tuple[asyncio.Task[T], asyncio.StreamWriter]:
-    """Open one TCP client and run ``session_factory`` on its pipe."""
+    """Open one TCP (or TLS when ``ssl`` is provided) client and run ``session_factory`` on its pipe."""
 
-    reader, writer = await asyncio.open_connection(host, port)
+    reader, writer = await asyncio.open_connection(
+        host,
+        port,
+        ssl=ssl,
+        server_hostname=server_hostname,
+    )
     pipe = dnp3.BytePipe()
     task = asyncio.create_task(run_over_tcp(session_factory(pipe), pipe, reader, writer))
     return task, writer
+
+
+def make_client_ssl_context(
+    *,
+    cafile: str | None = None,
+    certfile: str | None = None,
+    keyfile: str | None = None,
+    check_hostname: bool = True,
+) -> _ssl.SSLContext:
+    """Create a TLS/mTLS client ``ssl.SSLContext`` (TLS 1.2+ minimum)."""
+    ctx = _ssl.create_default_context(_ssl.Purpose.SERVER_AUTH, cafile=cafile)
+    ctx.minimum_version = _ssl.TLSVersion.TLSv1_2
+    ctx.check_hostname = check_hostname
+    if certfile is not None:
+        ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    return ctx
+
+
+def make_server_ssl_context(
+    certfile: str,
+    keyfile: str | None = None,
+    *,
+    cafile: str | None = None,
+    require_client_cert: bool = False,
+) -> _ssl.SSLContext:
+    """Create a TLS/mTLS server ``ssl.SSLContext`` (TLS 1.2+ minimum)."""
+    ctx = _ssl.create_default_context(_ssl.Purpose.CLIENT_AUTH, cafile=cafile)
+    ctx.minimum_version = _ssl.TLSVersion.TLSv1_2
+    ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    if require_client_cert:
+        ctx.verify_mode = _ssl.CERT_REQUIRED
+    return ctx
 
 
 class SoeHandlerBase:
@@ -167,5 +210,7 @@ __all__ = [
     "SoeHandlerBase",
     "connect",
     "listen",
+    "make_client_ssl_context",
+    "make_server_ssl_context",
     "run_over_tcp",
 ]

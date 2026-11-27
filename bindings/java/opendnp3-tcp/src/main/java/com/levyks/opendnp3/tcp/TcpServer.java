@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.concurrent.Executor;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
 
 /** A listening socket that accepts one DNP3 connection at a time. */
 public final class TcpServer implements AutoCloseable {
@@ -28,6 +30,29 @@ public final class TcpServer implements AutoCloseable {
         return new TcpServer(
                 new ServerSocket(port, 50, InetAddress.getByName(host)),
                 ioExecutor);
+    }
+
+    /** Listen for TLS (or mTLS when {@code needClientAuth} is true) connections. */
+    public static TcpServer listenTls(
+            String host,
+            int port,
+            SSLContext sslContext,
+            boolean needClientAuth) throws IOException {
+        return listenTls(host, port, sslContext, needClientAuth, null);
+    }
+
+    /** Listen for TLS (or mTLS) connections using a caller-supplied I/O {@link Executor}. */
+    public static TcpServer listenTls(
+            String host,
+            int port,
+            SSLContext sslContext,
+            boolean needClientAuth,
+            Executor ioExecutor) throws IOException {
+        SSLServerSocket server = (SSLServerSocket) sslContext
+                .getServerSocketFactory()
+                .createServerSocket(port, 50, InetAddress.getByName(host));
+        server.setNeedClientAuth(needClientAuth);
+        return new TcpServer(server, ioExecutor);
     }
 
     public int port() {

@@ -26,8 +26,27 @@ $Ffi = Join-Path $Root 'opendnp3-ffi'
 if (-not $SkipWindowsBuild) {
     $vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
     if (Test-Path $vcvars) {
-        cmd /c "set `"JAVA_HOME=$JavaHome`" && set `"PATH=$JavaHome\bin;%PATH%`" && call `"$vcvars`" >nul && cd /d `"$Ffi`" && boltffi pack java --release"
-        if ($LASTEXITCODE -ne 0) { throw "Windows boltffi pack java failed: $LASTEXITCODE" }
+        $winNativeDir = Join-Path $Ffi 'dist\java\native\windows-x86_64'
+        New-Item -ItemType Directory -Force -Path $winNativeDir | Out-Null
+        $outDll = Join-Path $winNativeDir 'opendnp3_ffi_jni.dll'
+        $jniDir = Join-Path $Ffi 'dist\java\jni'
+        $staticLib = Join-Path $Root 'target\release\opendnp3_ffi.lib'
+        $objFile = Join-Path $env:TEMP 'opendnp3_jni_glue.obj'
+        $winCmd = @(
+            "set `"JAVA_HOME=$JavaHome`"",
+            "set `"PATH=$JavaHome\bin;%PATH%`"",
+            "call `"$vcvars`" >nul",
+            "cd /d `"$Ffi`"",
+            "boltffi generate java",
+            "cargo build -p opendnp3-ffi --release",
+            "cl /nologo /O2 /LD /I`"$JavaHome\include`" /I`"$JavaHome\include\win32`" /I`"$jniDir`" `"$jniDir\jni_glue.c`" /Fo:`"$objFile`" /Fe:`"$outDll`" /link /WHOLEARCHIVE:`"$staticLib`" /FORCE:MULTIPLE ws2_32.lib userenv.lib bcrypt.lib advapi32.lib ntdll.lib"
+        ) -join ' && '
+        cmd /c $winCmd
+        if ($LASTEXITCODE -ne 0) { throw "Windows JNI build failed: $LASTEXITCODE" }
+        Remove-Item -Force -ErrorAction SilentlyContinue `
+            (Join-Path $winNativeDir 'opendnp3_ffi_jni.exp'), `
+            (Join-Path $winNativeDir 'opendnp3_ffi_jni.lib'), `
+            $objFile
     } else {
         throw "vcvars64.bat not found at $vcvars"
     }
@@ -65,7 +84,7 @@ if ($SkipUpload) {
     $pkgCmd = @'
 set -euo pipefail
 mvn -B -f /src/bindings/java/pom.xml -pl .,opendnp3,opendnp3-tcp,playground clean package
-java -cp /src/bindings/java/playground/target/opendnp3-playground-0.1.1.jar:/src/bindings/java/opendnp3-tcp/target/opendnp3-tcp-0.1.1.jar:/src/bindings/java/opendnp3/target/opendnp3-0.1.1.jar Playground
+java -cp /src/bindings/java/playground/target/opendnp3-playground-0.1.2.jar:/src/bindings/java/opendnp3-tcp/target/opendnp3-tcp-0.1.2.jar:/src/bindings/java/opendnp3/target/opendnp3-0.1.2.jar Playground
 '@
     $pkgCmd = $pkgCmd -replace "`r`n", "`n"
     docker run --rm -v "${Root}:/src" -w /src opendnp3-maven-linux bash -c $pkgCmd
@@ -94,17 +113,18 @@ cat > /root/.m2/settings.xml <<EOF
   </servers>
 </settings>
 EOF
-printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+printf '%s' "$GPG_PRIVATE_KEY_B64" | base64 -d | gpg --batch --import
 mvn -B -f /src/bindings/java/pom.xml -P central-release -pl .,opendnp3,opendnp3-tcp \
   -Dgpg.passphrase="${GPG_PASSPHRASE:-}" \
   clean deploy
 '@
 $deployCmd = $deployCmd -replace "`r`n", "`n"
+$env:GPG_PRIVATE_KEY_B64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($env:GPG_PRIVATE_KEY -replace "`r`n", "`n")))
 docker run --rm `
     -v "${Root}:/src" `
     -e CENTRAL_USERNAME `
     -e CENTRAL_PASSWORD `
-    -e GPG_PRIVATE_KEY `
+    -e GPG_PRIVATE_KEY_B64 `
     -e GPG_PASSPHRASE `
     -w /src `
     opendnp3-maven-linux `

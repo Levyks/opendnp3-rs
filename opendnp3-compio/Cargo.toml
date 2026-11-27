@@ -13,4 +13,4 @@ workspace = true
 
 [dependencies]
 compio = { version = "0.17", features = ["runtime", "time", "io"] }
-opendnp3 = { version = "0.1.1", path = "../opendnp3", features = ["async"] }
+opendnp3 = { version = "0.1.2", path = "../opendnp3", features = ["async"] }

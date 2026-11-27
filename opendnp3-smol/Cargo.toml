@@ -12,5 +12,5 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-opendnp3 = { version = "0.1.1", path = "../opendnp3", features = ["async"] }
+opendnp3 = { version = "0.1.2", path = "../opendnp3", features = ["async"] }
 smol = "2"

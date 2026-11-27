@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>Levyks.OpenDnp3.Tcp</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>levyks</Authors>
     <Description>TCP transport for Levyks.OpenDnp3. Sockets stay in this package.</Description>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Levyks.OpenDnp3" Version="0.1.1" />
+    <PackageReference Include="Levyks.OpenDnp3" Version="0.1.2" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
   </ItemGroup>
 </Project>

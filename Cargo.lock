@@ -1085,7 +1085,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "opendnp3"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "futures-util",
  "spin 0.10.1",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "opendnp3-compio"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "compio",
  "opendnp3",
@@ -1102,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "opendnp3-embassy"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "critical-section",
  "embassy-sync",
@@ -1114,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "opendnp3-ffi"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-executor",
  "async-io",
@@ -1128,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "opendnp3-smol"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "opendnp3",
  "smol",
@@ -1136,14 +1136,14 @@ dependencies = [
 
 [[package]]
 name = "opendnp3-std"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "opendnp3",
 ]
 
 [[package]]
 name = "opendnp3-tokio"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "opendnp3",
  "rcgen",
