@@ -1,6 +1,10 @@
+using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using Levyks.OpenDnp3;
 
 namespace Levyks.OpenDnp3.Tcp;
@@ -8,7 +12,7 @@ namespace Levyks.OpenDnp3.Tcp;
 /// <summary>
 /// One accepted or connected TCP socket plus the <see cref="Dnp3Stream"/> that drives it.
 /// </summary>
-public sealed class TcpConnection : IAsyncDisposable
+public sealed class TcpConnection : IAsyncDisposable, IDisposable
 {
     private readonly TcpClient _client;
 
@@ -28,7 +32,9 @@ public sealed class TcpConnection : IAsyncDisposable
         var client = new TcpClient();
         try
         {
-            await client.ConnectAsync(host, port, cancellationToken);
+            using var reg = cancellationToken.Register(client.Dispose);
+            await client.ConnectAsync(host, port).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             return new TcpConnection(client, new TcpDnp3Stream(client.GetStream()));
         }
         catch
@@ -41,10 +47,12 @@ public sealed class TcpConnection : IAsyncDisposable
     public static TcpConnection FromAccepted(TcpClient client) =>
         new(client, new TcpDnp3Stream(client.GetStream()));
 
+    public void Dispose() => _client.Dispose();
+
     public ValueTask DisposeAsync()
     {
         _client.Dispose();
-        return ValueTask.CompletedTask;
+        return default;
     }
 }
 
@@ -62,7 +70,9 @@ public static class TcpServer
         TcpListener listener,
         CancellationToken cancellationToken = default)
     {
-        var client = await listener.AcceptTcpClientAsync(cancellationToken);
+        using var reg = cancellationToken.Register(listener.Stop);
+        var client = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         return TcpConnection.FromAccepted(client);
     }
 }
@@ -73,13 +83,18 @@ sealed class TcpDnp3Stream(NetworkStream stream) : Dnp3Stream
 
     public async Task<byte[]> Read(uint maxBytes)
     {
-        var buf = new byte[Math.Min(maxBytes, 65536)];
+        int size = (int)Math.Min(maxBytes, 65536u);
+        var buf = new byte[size];
         try
         {
-            int n = await stream.ReadAsync(buf);
+            int n = await stream.ReadAsync(buf, 0, buf.Length).ConfigureAwait(false);
             if (n == 0)
                 throw new StreamErrorException(new StreamError.Closed());
-            return buf[..n];
+            if (n == buf.Length)
+                return buf;
+            var result = new byte[n];
+            Buffer.BlockCopy(buf, 0, result, 0, n);
+            return result;
         }
         catch (IOException ex)
         {
@@ -91,8 +106,8 @@ sealed class TcpDnp3Stream(NetworkStream stream) : Dnp3Stream
     {
         try
         {
-            await stream.WriteAsync(data);
-            await stream.FlushAsync();
+            await stream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
+            await stream.FlushAsync().ConfigureAwait(false);
         }
         catch (IOException ex)
         {
@@ -101,7 +116,7 @@ sealed class TcpDnp3Stream(NetworkStream stream) : Dnp3Stream
     }
 
     public Task SleepMs(ulong durationMs) =>
-        Task.Delay(TimeSpan.FromMilliseconds(Math.Min(durationMs, int.MaxValue)));
+        Task.Delay(TimeSpan.FromMilliseconds(Math.Min(durationMs, (ulong)int.MaxValue)));
 
     public ulong NowMs() => (ulong)_clock.ElapsedMilliseconds;
 }

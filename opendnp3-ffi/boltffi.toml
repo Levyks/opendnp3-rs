@@ -13,7 +13,7 @@ enabled = true
 namespace = "Levyks.OpenDnp3"
 module_class = "OpenDnp3Module"
 package_id = "Levyks.OpenDnp3"
-target_framework = "net8.0"
+target_framework = "netstandard2.0"
 
 [targets.csharp.nuget]
 title = "Levyks.OpenDnp3"
