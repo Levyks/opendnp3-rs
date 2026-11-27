@@ -32,7 +32,7 @@ The core crate is `no_std + alloc`. Enable `async` and a driver crate supplies t
 | `opendnp3-std` | Blocking `std::net` on OS threads. No async runtime. |
 | `opendnp3-ffi` | [BoltFFI](https://boltffi.dev) 0.32 bindings. Python, C#, and Java. The Rust side still has no sockets. |
 
-Version `0.1.0`. The Rust crates live in this repository. The language packages below are `0.1.0` on PyPI, NuGet, and Maven Central.
+Version `0.1.1`. The Rust crates live in this repository. The language packages below are `0.1.1` on PyPI, NuGet, and Maven Central.
 
 ## Rust
 
@@ -90,7 +90,7 @@ let (master, events) = spawn_tcp_master(
 ## Python
 
 ```text
-pip install opendnp3==0.1.0 opendnp3-tcp==0.1.0
+pip install opendnp3==0.1.1 opendnp3-tcp==0.1.1
 ```
 
 `opendnp3` is the BoltFFI binding. `opendnp3-tcp` is the asyncio socket adapter, which also provides `SoeHandlerBase` and `CommandHandlerBase` so you only override the callbacks you use.
@@ -139,8 +139,8 @@ task, writer = await tcp.connect("127.0.0.1", 20000, master.run_with_pipe)
 ## .NET
 
 ```text
-dotnet add package Levyks.OpenDnp3 --version 0.1.0
-dotnet add package Levyks.OpenDnp3.Tcp --version 0.1.0
+dotnet add package Levyks.OpenDnp3 --version 0.1.1
+dotnet add package Levyks.OpenDnp3.Tcp --version 0.1.1
 ```
 
 ```csharp
@@ -192,12 +192,12 @@ sealed class Commands : CommandHandlerBase
 <dependency>
   <groupId>com.levyks</groupId>
   <artifactId>opendnp3</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 <dependency>
   <groupId>com.levyks</groupId>
   <artifactId>opendnp3-tcp</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
