@@ -8,8 +8,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 final class TcpDnp3Stream implements Dnp3Stream {
@@ -17,16 +17,25 @@ final class TcpDnp3Stream implements Dnp3Stream {
     private final InputStream in;
     private final OutputStream out;
     private final long startNanos = System.nanoTime();
-    private final ExecutorService io = Executors.newCachedThreadPool(runnable -> {
-        Thread thread = new Thread(runnable, "opendnp3-tcp");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final Executor io;
+    private final ExecutorService ownedExecutor;
 
     TcpDnp3Stream(Socket socket) throws IOException {
+        this(socket, null);
+    }
+
+    TcpDnp3Stream(Socket socket, Executor ioExecutor) throws IOException {
+        socket.setTcpNoDelay(true);
         this.socket = socket;
         this.in = socket.getInputStream();
         this.out = socket.getOutputStream();
+        if (ioExecutor != null) {
+            this.io = ioExecutor;
+            this.ownedExecutor = null;
+        } else {
+            this.ownedExecutor = TcpExecutors.newDaemonCachedPool();
+            this.io = this.ownedExecutor;
+        }
     }
 
     @Override
@@ -79,7 +88,9 @@ final class TcpDnp3Stream implements Dnp3Stream {
     }
 
     public void close() {
-        io.shutdownNow();
+        if (ownedExecutor != null) {
+            ownedExecutor.shutdownNow();
+        }
         try {
             socket.close();
         } catch (IOException ignored) {

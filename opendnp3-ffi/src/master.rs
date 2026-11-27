@@ -60,20 +60,20 @@ impl Default for CommandSet {
 #[export]
 pub struct Master {
     link_cfg: opendnp3::link::LinkConfig,
-    master: Mutex<Option<opendnp3::master::Master>>,
+    master: Arc<Mutex<Option<opendnp3::master::Master>>>,
     soe: Arc<dyn SoeHandler>,
     handle: MasterHandle,
-    cmd_rx: UnboundedReceiver<MasterCommand>,
+    cmd_rx: Arc<UnboundedReceiver<MasterCommand>>,
     ev_tx: UnboundedSender<opendnp3::master::MasterEvent>,
     ev_rx: UnboundedReceiver<opendnp3::master::MasterEvent>,
 }
 
-struct RestoreOnDrop<'a, T> {
-    slot: &'a Mutex<Option<T>>,
+struct RestoreOnDrop<T> {
+    slot: Arc<Mutex<Option<T>>>,
     value: Option<T>,
 }
 
-impl<T> Drop for RestoreOnDrop<'_, T> {
+impl<T> Drop for RestoreOnDrop<T> {
     fn drop(&mut self) {
         if let Some(v) = self.value.take() {
             *self.slot.lock().unwrap() = Some(v);
@@ -91,10 +91,10 @@ impl Master {
         let (ev_tx, ev_rx) = unbounded();
         Self {
             link_cfg,
-            master: Mutex::new(Some(master)),
+            master: Arc::new(Mutex::new(Some(master))),
             soe,
             handle,
-            cmd_rx,
+            cmd_rx: Arc::new(cmd_rx),
             ev_tx,
             ev_rx,
         }
@@ -108,7 +108,7 @@ impl Master {
             return false;
         };
         let mut guard = RestoreOnDrop {
-            slot: &self.master,
+            slot: Arc::clone(&self.master),
             value: Some(master),
         };
         let bridge = StreamBridge(stream);
@@ -134,7 +134,7 @@ impl Master {
             return false;
         };
         let mut guard = RestoreOnDrop {
-            slot: &self.master,
+            slot: Arc::clone(&self.master),
             value: Some(master),
         };
         let stream = PipeStream::new(pipe);
@@ -210,34 +210,55 @@ impl Master {
 #[cfg(feature = "smol-tcp")]
 #[export]
 impl Master {
-    /// Connect to `host:port` over Rust-managed TCP (`smol` / `async-net`) and run until EOF or
-    /// [`shutdown`](Self::shutdown). Zero per-packet FFI hops.
+    /// Connect to `host:port` over Rust-managed TCP (`Direct` mode for lowest latency).
     pub async fn run_tcp(
         &self,
         host: String,
         port: u16,
     ) -> Result<bool, crate::types::StreamError> {
-        let stream = crate::tcp::SmolTcpStream::connect(&host, port).await?;
-        let taken = self.master.lock().unwrap().take();
-        let Some(master) = taken else {
-            return Ok(false);
+        self.run_tcp_with_mode(host, port, crate::tcp::TcpMode::Direct)
+            .await
+    }
+
+    /// Connect to `host:port` over Rust-managed TCP using the chosen [`TcpMode`].
+    pub async fn run_tcp_with_mode(
+        &self,
+        host: String,
+        port: u16,
+        mode: crate::tcp::TcpMode,
+    ) -> Result<bool, crate::types::StreamError> {
+        let master_slot = Arc::clone(&self.master);
+        let link_cfg = self.link_cfg.clone();
+        let soe_ref = Arc::clone(&self.soe);
+        let cmd_rx = Arc::clone(&self.cmd_rx);
+        let ev_tx = self.ev_tx.clone();
+        let fut = async move {
+            let stream = crate::tcp::SmolTcpStream::connect(&host, port).await?;
+            let taken = master_slot.lock().unwrap().take();
+            let Some(master) = taken else {
+                return Ok(false);
+            };
+            let mut guard = RestoreOnDrop {
+                slot: master_slot,
+                value: Some(master),
+            };
+            let mut soe = SoeBridge(soe_ref);
+            let mut app = opendnp3::master::DefaultMasterApplication;
+            Ok(run_master_session(
+                &stream,
+                link_cfg,
+                guard.value.as_mut().unwrap(),
+                &mut soe,
+                &mut app,
+                &cmd_rx,
+                &ev_tx,
+            )
+            .await)
         };
-        let mut guard = RestoreOnDrop {
-            slot: &self.master,
-            value: Some(master),
-        };
-        let mut soe = SoeBridge(Arc::clone(&self.soe));
-        let mut app = opendnp3::master::DefaultMasterApplication;
-        Ok(run_master_session(
-            &stream,
-            self.link_cfg.clone(),
-            guard.value.as_mut().unwrap(),
-            &mut soe,
-            &mut app,
-            &self.cmd_rx,
-            &self.ev_tx,
-        )
-        .await)
+        match mode {
+            crate::tcp::TcpMode::Direct => fut.await,
+            crate::tcp::TcpMode::Pooled => crate::tcp::spawn_on_pool(fut).await,
+        }
     }
 
     /// Connect to `host:port` over Rust-managed TCP and automatically reconnect with exponential
@@ -248,62 +269,74 @@ impl Master {
         port: u16,
         min_retry_ms: u64,
         max_retry_ms: u64,
+        mode: crate::tcp::TcpMode,
     ) -> bool {
-        let taken = self.master.lock().unwrap().take();
-        let Some(master) = taken else {
-            return false;
-        };
-        let mut guard = RestoreOnDrop {
-            slot: &self.master,
-            value: Some(master),
-        };
-        let mut soe = SoeBridge(Arc::clone(&self.soe));
-        let mut app = opendnp3::master::DefaultMasterApplication;
-        let min_delay = Duration::from_millis(min_retry_ms.max(10));
-        let max_delay = Duration::from_millis(max_retry_ms.max(min_retry_ms.max(10)));
-        let mut delay = min_delay;
+        let master_slot = Arc::clone(&self.master);
+        let link_cfg = self.link_cfg.clone();
+        let soe_ref = Arc::clone(&self.soe);
+        let cmd_rx = Arc::clone(&self.cmd_rx);
+        let ev_tx = self.ev_tx.clone();
+        let fut = async move {
+            let taken = master_slot.lock().unwrap().take();
+            let Some(master) = taken else {
+                return false;
+            };
+            let mut guard = RestoreOnDrop {
+                slot: master_slot,
+                value: Some(master),
+            };
+            let mut soe = SoeBridge(soe_ref);
+            let mut app = opendnp3::master::DefaultMasterApplication;
+            let min_delay = Duration::from_millis(min_retry_ms.max(10));
+            let max_delay = Duration::from_millis(max_retry_ms.max(min_retry_ms.max(10)));
+            let mut delay = min_delay;
 
-        loop {
-            let connect_or_cmd = futures_lite::future::or(
-                async { Ok(crate::tcp::SmolTcpStream::connect(&host, port).await) },
-                async { Err(self.cmd_rx.recv().await) },
-            )
-            .await;
+            loop {
+                let connect_or_cmd = futures_lite::future::or(
+                    async { Ok(crate::tcp::SmolTcpStream::connect(&host, port).await) },
+                    async { Err(cmd_rx.recv().await) },
+                )
+                .await;
 
-            match connect_or_cmd {
-                Ok(Ok(stream)) => {
-                    delay = min_delay;
-                    let shutdown = run_master_session(
-                        &stream,
-                        self.link_cfg.clone(),
-                        guard.value.as_mut().unwrap(),
-                        &mut soe,
-                        &mut app,
-                        &self.cmd_rx,
-                        &self.ev_tx,
-                    )
-                    .await;
-                    if shutdown {
-                        return true;
+                match connect_or_cmd {
+                    Ok(Ok(stream)) => {
+                        delay = min_delay;
+                        let shutdown = run_master_session(
+                            &stream,
+                            link_cfg.clone(),
+                            guard.value.as_mut().unwrap(),
+                            &mut soe,
+                            &mut app,
+                            &cmd_rx,
+                            &ev_tx,
+                        )
+                        .await;
+                        if shutdown {
+                            return true;
+                        }
                     }
+                    Ok(Err(_)) => {}
+                    Err(Some(MasterCommand::Shutdown)) | Err(None) => return true,
+                    Err(Some(_)) => continue,
                 }
-                Ok(Err(_)) => {}
-                Err(Some(MasterCommand::Shutdown)) | Err(None) => return true,
-                Err(Some(_)) => continue,
-            }
 
-            let sleep_or_cmd = futures_lite::future::or(
-                async {
-                    async_io::Timer::after(delay).await;
-                    Ok(())
-                },
-                async { Err(self.cmd_rx.recv().await) },
-            )
-            .await;
-            if matches!(sleep_or_cmd, Err(Some(MasterCommand::Shutdown)) | Err(None)) {
-                return true;
+                let sleep_or_cmd = futures_lite::future::or(
+                    async {
+                        async_io::Timer::after(delay).await;
+                        Ok(())
+                    },
+                    async { Err(cmd_rx.recv().await) },
+                )
+                .await;
+                if matches!(sleep_or_cmd, Err(Some(MasterCommand::Shutdown)) | Err(None)) {
+                    return true;
+                }
+                delay = (delay * 2).min(max_delay);
             }
-            delay = (delay * 2).min(max_delay);
+        };
+        match mode {
+            crate::tcp::TcpMode::Direct => fut.await,
+            crate::tcp::TcpMode::Pooled => crate::tcp::spawn_on_pool(fut).await,
         }
     }
 
@@ -312,45 +345,58 @@ impl Master {
     pub async fn run_tcp_server(
         &self,
         listener: &crate::tcp::TcpListener,
+        mode: crate::tcp::TcpMode,
     ) -> Result<bool, crate::types::StreamError> {
-        let taken = self.master.lock().unwrap().take();
-        let Some(master) = taken else {
-            return Ok(false);
-        };
-        let mut guard = RestoreOnDrop {
-            slot: &self.master,
-            value: Some(master),
-        };
-        let mut soe = SoeBridge(Arc::clone(&self.soe));
-        let mut app = opendnp3::master::DefaultMasterApplication;
+        let master_slot = Arc::clone(&self.master);
+        let link_cfg = self.link_cfg.clone();
+        let soe_ref = Arc::clone(&self.soe);
+        let cmd_rx = Arc::clone(&self.cmd_rx);
+        let ev_tx = self.ev_tx.clone();
+        let inner = listener.clone_inner();
+        let fut = async move {
+            let taken = master_slot.lock().unwrap().take();
+            let Some(master) = taken else {
+                return Ok(false);
+            };
+            let mut guard = RestoreOnDrop {
+                slot: master_slot,
+                value: Some(master),
+            };
+            let mut soe = SoeBridge(soe_ref);
+            let mut app = opendnp3::master::DefaultMasterApplication;
 
-        loop {
-            let accept_or_cmd =
-                futures_lite::future::or(async { Ok(listener.accept().await) }, async {
-                    Err(self.cmd_rx.recv().await)
-                })
+            loop {
+                let accept_or_cmd = futures_lite::future::or(
+                    async { Ok(crate::tcp::TcpListener::accept_inner(&inner).await) },
+                    async { Err(cmd_rx.recv().await) },
+                )
                 .await;
-            match accept_or_cmd {
-                Ok(Ok(tcp)) => {
-                    let stream = crate::tcp::SmolTcpStream::new(tcp);
-                    let shutdown = run_master_session(
-                        &stream,
-                        self.link_cfg.clone(),
-                        guard.value.as_mut().unwrap(),
-                        &mut soe,
-                        &mut app,
-                        &self.cmd_rx,
-                        &self.ev_tx,
-                    )
-                    .await;
-                    if shutdown {
-                        return Ok(true);
+                match accept_or_cmd {
+                    Ok(Ok(tcp)) => {
+                        let stream = crate::tcp::SmolTcpStream::new(tcp);
+                        let shutdown = run_master_session(
+                            &stream,
+                            link_cfg.clone(),
+                            guard.value.as_mut().unwrap(),
+                            &mut soe,
+                            &mut app,
+                            &cmd_rx,
+                            &ev_tx,
+                        )
+                        .await;
+                        if shutdown {
+                            return Ok(true);
+                        }
                     }
+                    Ok(Err(e)) => return Err(e),
+                    Err(Some(MasterCommand::Shutdown)) | Err(None) => return Ok(true),
+                    Err(Some(_)) => {}
                 }
-                Ok(Err(e)) => return Err(e),
-                Err(Some(MasterCommand::Shutdown)) | Err(None) => return Ok(true),
-                Err(Some(_)) => {}
             }
+        };
+        match mode {
+            crate::tcp::TcpMode::Direct => fut.await,
+            crate::tcp::TcpMode::Pooled => crate::tcp::spawn_on_pool(fut).await,
         }
     }
 }

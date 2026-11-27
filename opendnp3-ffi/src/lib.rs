@@ -21,5 +21,5 @@ pub use master::{CommandSet, Master};
 pub use outstation::{DatabaseConfig, Outstation};
 pub use pipe::BytePipe;
 #[cfg(feature = "smol-tcp")]
-pub use tcp::TcpListener;
+pub use tcp::{TcpListener, TcpMode};
 pub use types::*;

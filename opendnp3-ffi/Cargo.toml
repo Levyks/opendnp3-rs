@@ -12,9 +12,10 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
 default = ["smol-tcp"]
-smol-tcp = ["dep:async-io", "dep:async-net", "dep:futures-lite"]
+smol-tcp = ["dep:async-executor", "dep:async-io", "dep:async-net", "dep:futures-lite"]
 
 [dependencies]
+async-executor = { version = "1", optional = true }
 async-io = { version = "2", optional = true }
 async-net = { version = "2", optional = true }
 async-trait = "0.1"

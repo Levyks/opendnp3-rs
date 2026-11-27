@@ -1116,6 +1116,7 @@ dependencies = [
 name = "opendnp3-ffi"
 version = "0.1.1"
 dependencies = [
+ "async-executor",
  "async-io",
  "async-net",
  "async-trait",

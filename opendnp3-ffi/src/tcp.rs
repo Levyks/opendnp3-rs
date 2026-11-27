@@ -4,21 +4,61 @@
 //! stay entirely in Rust while BoltFFI polls the top-level future from the host
 //! language's async runtime.
 
+use std::future::Future;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use async_executor::{Executor, Task};
 use async_io::Timer;
 use async_net::{TcpListener as AsyncTcpListener, TcpStream as AsyncTcpStream};
-use boltffi::export;
+use boltffi::{data, export};
 use futures_lite::io::{AsyncReadExt, AsyncWriteExt};
 use opendnp3::clock::MonotonicTime;
 use opendnp3::driver::{AsyncStream, StreamError as CoreStreamError};
 
 use crate::types::StreamError;
 
+/// Execution mode for built-in Rust `smol-tcp` sessions.
+#[data]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TcpMode {
+    /// Poll directly on the host/reactor wake path (lowest single-connection latency).
+    Direct,
+    /// Spawn onto the shared multi-threaded work-stealing `async-executor` pool.
+    Pooled,
+}
+
+/// Shared multi-threaded work-stealing `smol` executor so concurrent TCP sessions
+/// scale across all CPU cores instead of running on `async-io`'s single reactor thread.
+pub(crate) fn spawn_on_pool<F, T>(fut: F) -> Task<T>
+where
+    F: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    static EXECUTOR: OnceLock<Executor<'static>> = OnceLock::new();
+    static WORKERS: OnceLock<()> = OnceLock::new();
+
+    let ex = EXECUTOR.get_or_init(Executor::new);
+    WORKERS.get_or_init(|| {
+        let count = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2);
+        for i in 0..count {
+            let _ = std::thread::Builder::new()
+                .name(format!("opendnp3-smol-{i}"))
+                .spawn(|| {
+                    let ex = EXECUTOR.get().expect("executor initialized");
+                    futures_lite::future::block_on(ex.run(std::future::pending::<()>()));
+                });
+        }
+    });
+    ex.spawn(fut)
+}
+
 /// Bound TCP listener for [`Outstation::run_tcp_server`] or [`Master::run_tcp_server`].
 #[export]
 pub struct TcpListener {
-    inner: AsyncTcpListener,
+    inner: std::sync::Arc<AsyncTcpListener>,
     local_port: u16,
 }
 
@@ -37,7 +77,10 @@ impl TcpListener {
                 message: e.to_string(),
             })?
             .port();
-        Ok(Self { inner, local_port })
+        Ok(Self {
+            inner: std::sync::Arc::new(inner),
+            local_port,
+        })
     }
 
     /// Return the local TCP port this listener is bound to.
@@ -47,8 +90,14 @@ impl TcpListener {
 }
 
 impl TcpListener {
-    pub(crate) async fn accept(&self) -> Result<AsyncTcpStream, StreamError> {
-        let (stream, _peer) = self.inner.accept().await.map_err(|e| StreamError::Io {
+    pub(crate) fn clone_inner(&self) -> std::sync::Arc<AsyncTcpListener> {
+        std::sync::Arc::clone(&self.inner)
+    }
+
+    pub(crate) async fn accept_inner(
+        inner: &AsyncTcpListener,
+    ) -> Result<AsyncTcpStream, StreamError> {
+        let (stream, _peer) = inner.accept().await.map_err(|e| StreamError::Io {
             message: e.to_string(),
         })?;
         let _ = stream.set_nodelay(true);

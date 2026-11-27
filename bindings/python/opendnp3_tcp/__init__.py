@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -20,6 +21,12 @@ async def run_over_tcp(
     writer: asyncio.StreamWriter,
 ) -> T:
     """Pump one asyncio stream through ``pipe`` until ``session`` finishes."""
+    sock = writer.get_extra_info("socket")
+    if sock is not None:
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
 
     async def pump_rx() -> None:
         try:

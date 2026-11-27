@@ -29,7 +29,7 @@ public sealed class TcpConnection : IAsyncDisposable, IDisposable
         int port,
         CancellationToken cancellationToken = default)
     {
-        var client = new TcpClient();
+        var client = new TcpClient { NoDelay = true };
         try
         {
             using var reg = cancellationToken.Register(client.Dispose);
@@ -44,8 +44,11 @@ public sealed class TcpConnection : IAsyncDisposable, IDisposable
         }
     }
 
-    public static TcpConnection FromAccepted(TcpClient client) =>
-        new(client, new TcpDnp3Stream(client.GetStream()));
+    public static TcpConnection FromAccepted(TcpClient client)
+    {
+        client.NoDelay = true;
+        return new(client, new TcpDnp3Stream(client.GetStream()));
+    }
 
     public void Dispose() => _client.Dispose();
 
