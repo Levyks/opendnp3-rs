@@ -14,13 +14,13 @@ The code was vibe coded. Coding agents wrote it. It was not transcribed from the
 
 ## Tests
 
-`cargo test --workspace` passes **533** tests.
+`cargo test --workspace --all-features` passes **534** tests.
 
 **415** of those are the C++ unit suite, ported case by case from `cpp/tests/unit` in [dnp3/opendnp3](https://github.com/dnp3/opendnp3). That directory has 436 `TEST_CASE`s. The 21 that were not ported cover C++ utilities rather than the protocol: `TestList`, `TestLog`, `TestShiftableBuffer`, `TestTimeDuration`, `TestIPEndpointsList`, and `TestCollectionTransform`. The C++ `asiotests/` and `integration/` trees were not copied. The Rust adapters have their own TCP tests instead.
 
 ## Layout
 
-The core crate is `no_std + alloc`. Enable `async` and a driver crate supplies the clock and the byte stream. `#![forbid(unsafe_code)]` is set for the workspace.
+The core crate is `no_std + alloc`. Enable `async` and a driver crate supplies the clock and the byte stream. `#![forbid(unsafe_code)]` is set for the workspace (with `opendnp3-ffi` as the sole exception, since BoltFFI's generated FFI glue emits `unsafe`).
 
 | Crate | What it does |
 |---|---|
@@ -93,43 +93,22 @@ let (master, events) = spawn_tcp_master(
 pip install opendnp3==0.1.0 opendnp3-tcp==0.1.0
 ```
 
-`opendnp3` is the BoltFFI binding. `opendnp3-tcp` is the asyncio socket adapter. You build `Outstation` and `Master` yourself, then hand each one's `run_with_pipe` to the adapter. The callback classes must implement every method on the trait.
+`opendnp3` is the BoltFFI binding. `opendnp3-tcp` is the asyncio socket adapter, which also provides `SoeHandlerBase` and `CommandHandlerBase` so you only override the callbacks you use.
 
 ```python
 import opendnp3 as dnp3
 import opendnp3_tcp as tcp
 
-class Soe:
-    def on_binary(self, values): pass
-    def on_double_bit(self, values): pass
-    def on_binary_output_status(self, values): pass
-    def on_counter(self, values): pass
-    def on_frozen_counter(self, values): pass
-    def on_analog(self, values): pass
-    def on_analog_output_status(self, values): pass
-    def on_octet_string(self, values): pass
+class Soe(tcp.SoeHandlerBase):
+    def on_analog(self, values):
+        for v in values:
+            print(f"Analog[{v.index}] = {v.value}")
 
-class Commands:
+class Commands(tcp.CommandHandlerBase):
     def select_crob(self, command, index):
         return dnp3.CommandStatus.SUCCESS
     def operate_crob(self, command, index, op_type):
         return dnp3.CommandStatus.SUCCESS
-    def select_ao_i32(self, value, index):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def operate_ao_i32(self, value, index, op_type):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def select_ao_i16(self, value, index):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def operate_ao_i16(self, value, index, op_type):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def select_ao_f32(self, value, index):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def operate_ao_f32(self, value, index, op_type):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def select_ao_f64(self, value, index):
-        return dnp3.CommandStatus.NOT_SUPPORTED
-    def operate_ao_f64(self, value, index, op_type):
-        return dnp3.CommandStatus.NOT_SUPPORTED
 
 all_classes = dnp3.ClassField(True, True, True, True)
 no_classes = dnp3.ClassField(False, False, False, False)
@@ -195,30 +174,15 @@ var serverTask = Task.Run(async () =>
 await using var client = await TcpConnection.ConnectAsync("127.0.0.1", port);
 await master.Run(client.Stream);
 
-sealed class Soe : SoeHandler
+sealed class Soe : SoeHandlerBase
 {
-    public void OnBinary(Binary[] values) { }
-    public void OnDoubleBit(DoubleBitBinary[] values) { }
-    public void OnBinaryOutputStatus(BinaryOutputStatus[] values) { }
-    public void OnCounter(Counter[] values) { }
-    public void OnFrozenCounter(FrozenCounter[] values) { }
-    public void OnAnalog(Analog[] values) { }
-    public void OnAnalogOutputStatus(AnalogOutputStatus[] values) { }
-    public void OnOctetString(OctetString[] values) { }
+    public override void OnAnalog(Analog[] values) { }
 }
 
-sealed class Commands : CommandHandler
+sealed class Commands : CommandHandlerBase
 {
-    public CommandStatus SelectCrob(Crob command, ushort index) => CommandStatus.Success;
-    public CommandStatus OperateCrob(Crob command, ushort index, OperateType opType) => CommandStatus.Success;
-    public CommandStatus SelectAoI32(int value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoI32(int value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoI16(short value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoI16(short value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoF32(float value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoF32(float value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoF64(double value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoF64(double value, ushort index, OperateType opType) => CommandStatus.NotSupported;
+    public override CommandStatus SelectCrob(Crob command, ushort index) => CommandStatus.Success;
+    public override CommandStatus OperateCrob(Crob command, ushort index, OperateType opType) => CommandStatus.Success;
 }
 ```
 
@@ -254,35 +218,28 @@ Master master = new Master(
         new Soe());
 
 try (TcpServer server = TcpServer.listen("127.0.0.1", 0)) {
+    CompletableFuture<TcpConnection> accepted = CompletableFuture.supplyAsync(() -> {
+        try { return server.accept(); } catch (Exception e) { throw new RuntimeException(e); }
+    });
     try (TcpConnection conn = TcpConnection.connect("127.0.0.1", server.port());
-            TcpConnection accepted = server.accept()) {
-        outstation.run(accepted.stream());
-        master.run(conn.stream());
+            TcpConnection peer = accepted.join()) {
+        CompletableFuture<Boolean> outstationRun = outstation.run(peer.stream());
+        CompletableFuture<Boolean> masterRun = master.run(conn.stream());
+        // ... poll / update points / send commands, then shut down ...
+        master.shutdown();
+        outstation.shutdown();
+        masterRun.join();
+        outstationRun.join();
     }
 }
 
-class Soe implements SoeHandler {
-    public void onBinary(List<Binary> values) {}
-    public void onDoubleBit(List<DoubleBitBinary> values) {}
-    public void onBinaryOutputStatus(List<BinaryOutputStatus> values) {}
-    public void onCounter(List<Counter> values) {}
-    public void onFrozenCounter(List<FrozenCounter> values) {}
-    public void onAnalog(List<Analog> values) {}
-    public void onAnalogOutputStatus(List<AnalogOutputStatus> values) {}
-    public void onOctetString(List<OctetString> values) {}
+class Soe extends SoeHandlerBase {
+    @Override public void onAnalog(List<Analog> values) {}
 }
 
-class Commands implements CommandHandler {
-    public CommandStatus selectCrob(Crob command, short index) { return CommandStatus.SUCCESS; }
-    public CommandStatus operateCrob(Crob command, short index, OperateType opType) { return CommandStatus.SUCCESS; }
-    public CommandStatus selectAoI32(int value, short index) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus operateAoI32(int value, short index, OperateType opType) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus selectAoI16(short value, short index) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus operateAoI16(short value, short index, OperateType opType) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus selectAoF32(float value, short index) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus operateAoF32(float value, short index, OperateType opType) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus selectAoF64(double value, short index) { return CommandStatus.NOT_SUPPORTED; }
-    public CommandStatus operateAoF64(double value, short index, OperateType opType) { return CommandStatus.NOT_SUPPORTED; }
+class Commands extends CommandHandlerBase {
+    @Override public CommandStatus selectCrob(Crob command, short index) { return CommandStatus.SUCCESS; }
+    @Override public CommandStatus operateCrob(Crob command, short index, OperateType opType) { return CommandStatus.SUCCESS; }
 }
 ```
 

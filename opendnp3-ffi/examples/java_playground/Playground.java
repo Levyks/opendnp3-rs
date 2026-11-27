@@ -30,6 +30,8 @@ import com.levyks.opendnp3.TimeSyncMode;
 import com.levyks.opendnp3.TimestampQuality;
 import com.levyks.opendnp3.TripCloseCode;
 
+import com.levyks.opendnp3.tcp.CommandHandlerBase;
+import com.levyks.opendnp3.tcp.SoeHandlerBase;
 import com.levyks.opendnp3.tcp.TcpConnection;
 import com.levyks.opendnp3.tcp.TcpServer;
 
@@ -218,7 +220,7 @@ public final class Playground {
 
     private Playground() {}
 
-    static final class PlaygroundSoeHandler implements SoeHandler {
+    static final class PlaygroundSoeHandler extends SoeHandlerBase {
         final List<Binary> binaries = new ArrayList<>();
         final List<Analog> analogs = new ArrayList<>();
 
@@ -235,18 +237,6 @@ public final class Playground {
         }
 
         @Override
-        public void onDoubleBit(List<DoubleBitBinary> values) {}
-
-        @Override
-        public void onBinaryOutputStatus(List<BinaryOutputStatus> values) {}
-
-        @Override
-        public void onCounter(List<Counter> values) {}
-
-        @Override
-        public void onFrozenCounter(List<FrozenCounter> values) {}
-
-        @Override
         public void onAnalog(List<Analog> values) {
             for (Analog value : values) {
                 System.out.printf(
@@ -257,12 +247,6 @@ public final class Playground {
             }
             analogs.addAll(values);
         }
-
-        @Override
-        public void onAnalogOutputStatus(List<AnalogOutputStatus> values) {}
-
-        @Override
-        public void onOctetString(List<OctetString> values) {}
     }
 
     static final class Operated {
@@ -275,7 +259,7 @@ public final class Playground {
         }
     }
 
-    static final class PlaygroundCommandHandler implements CommandHandler {
+    static final class PlaygroundCommandHandler extends CommandHandlerBase {
         final List<Short> selected = new ArrayList<>();
         final List<Operated> operated = new ArrayList<>();
 
@@ -292,46 +276,6 @@ public final class Playground {
                     "  [Outstation CMD] OPERATE CROB index=" + index + " op=" + command.opType + " mode=" + opType);
             operated.add(new Operated(index, opType));
             return CommandStatus.SUCCESS;
-        }
-
-        @Override
-        public CommandStatus selectAoI32(int value, short index) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus operateAoI32(int value, short index, OperateType opType) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus selectAoI16(short value, short index) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus operateAoI16(short value, short index, OperateType opType) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus selectAoF32(float value, short index) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus operateAoF32(float value, short index, OperateType opType) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus selectAoF64(double value, short index) {
-            return CommandStatus.NOT_SUPPORTED;
-        }
-
-        @Override
-        public CommandStatus operateAoF64(double value, short index, OperateType opType) {
-            return CommandStatus.NOT_SUPPORTED;
         }
     }
 }

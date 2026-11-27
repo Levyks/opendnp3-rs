@@ -29,8 +29,8 @@ import opendnp3 as dnp3
 import opendnp3_tcp as tcp
 
 
-class PlaygroundSoeHandler:
-    """Implements Rust's `SoeHandler` trait for Master measurement callbacks."""
+class PlaygroundSoeHandler(tcp.SoeHandlerBase):
+    """Overrides only the binary and analog callbacks we inspect."""
 
     def __init__(self) -> None:
         self.binaries: list[dnp3.Binary] = []
@@ -41,32 +41,14 @@ class PlaygroundSoeHandler:
             print(f"  [Master SOE] Binary[{v.index}] = {v.value} (flags=0x{v.flags:02x})")
         self.binaries.extend(values)
 
-    def on_double_bit(self, values: list[dnp3.DoubleBitBinary]) -> None:
-        pass
-
-    def on_binary_output_status(self, values: list[dnp3.BinaryOutputStatus]) -> None:
-        pass
-
-    def on_counter(self, values: list[dnp3.Counter]) -> None:
-        pass
-
-    def on_frozen_counter(self, values: list[dnp3.FrozenCounter]) -> None:
-        pass
-
     def on_analog(self, values: list[dnp3.Analog]) -> None:
         for v in values:
             print(f"  [Master SOE] Analog[{v.index}] = {v.value} (flags=0x{v.flags:02x})")
         self.analogs.extend(values)
 
-    def on_analog_output_status(self, values: list[dnp3.AnalogOutputStatus]) -> None:
-        pass
 
-    def on_octet_string(self, values: list[dnp3.OctetString]) -> None:
-        pass
-
-
-class PlaygroundCommandHandler:
-    """Implements Rust's `CommandHandler` trait for Outstation control callbacks."""
+class PlaygroundCommandHandler(tcp.CommandHandlerBase):
+    """Overrides only CROB select/operate; all Analog Output commands default to NOT_SUPPORTED."""
 
     def __init__(self) -> None:
         self.selected: list[int] = []
@@ -85,38 +67,6 @@ class PlaygroundCommandHandler:
         )
         self.operated.append((index, op_type))
         return dnp3.CommandStatus.SUCCESS
-
-    def select_ao_i32(self, value: int, index: int) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def operate_ao_i32(
-        self, value: int, index: int, op_type: dnp3.OperateType
-    ) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def select_ao_i16(self, value: int, index: int) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def operate_ao_i16(
-        self, value: int, index: int, op_type: dnp3.OperateType
-    ) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def select_ao_f32(self, value: float, index: int) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def operate_ao_f32(
-        self, value: float, index: int, op_type: dnp3.OperateType
-    ) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def select_ao_f64(self, value: float, index: int) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
-
-    def operate_ao_f64(
-        self, value: float, index: int, op_type: dnp3.OperateType
-    ) -> dnp3.CommandStatus:
-        return dnp3.CommandStatus.NOT_SUPPORTED
 
 
 async def main() -> None:

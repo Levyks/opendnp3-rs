@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 final class TcpDnp3Stream implements Dnp3Stream {
     private final Socket socket;
@@ -66,17 +67,10 @@ final class TcpDnp3Stream implements Dnp3Stream {
 
     @Override
     public CompletableFuture<Void> sleepMs(long durationMs) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        io.execute(() -> {
-            try {
-                Thread.sleep(Math.min(Math.max(durationMs, 0), Integer.MAX_VALUE));
-                future.complete(null);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                future.completeExceptionally(ex);
-            }
-        });
-        return future;
+        long clamped = Math.max(durationMs, 0L);
+        return CompletableFuture.runAsync(
+                () -> {},
+                CompletableFuture.delayedExecutor(clamped, TimeUnit.MILLISECONDS));
     }
 
     @Override

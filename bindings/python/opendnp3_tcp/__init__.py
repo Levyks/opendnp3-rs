@@ -83,4 +83,82 @@ async def connect(
     return task, writer
 
 
-__all__ = ["connect", "listen", "run_over_tcp"]
+class SoeHandlerBase:
+    """No-op base class for ``SoeHandler``. Override only the measurement types you care about."""
+
+    def on_binary(self, values: list[dnp3.Binary]) -> None:
+        pass
+
+    def on_double_bit(self, values: list[dnp3.DoubleBitBinary]) -> None:
+        pass
+
+    def on_binary_output_status(self, values: list[dnp3.BinaryOutputStatus]) -> None:
+        pass
+
+    def on_counter(self, values: list[dnp3.Counter]) -> None:
+        pass
+
+    def on_frozen_counter(self, values: list[dnp3.FrozenCounter]) -> None:
+        pass
+
+    def on_analog(self, values: list[dnp3.Analog]) -> None:
+        pass
+
+    def on_analog_output_status(self, values: list[dnp3.AnalogOutputStatus]) -> None:
+        pass
+
+    def on_octet_string(self, values: list[dnp3.OctetString]) -> None:
+        pass
+
+
+class CommandHandlerBase:
+    """Default-reject base class for ``CommandHandler``. Override only the commands you support."""
+
+    def select_crob(self, command: dnp3.Crob, index: int) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def operate_crob(
+        self, command: dnp3.Crob, index: int, op_type: dnp3.OperateType
+    ) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def select_ao_i32(self, value: int, index: int) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def operate_ao_i32(
+        self, value: int, index: int, op_type: dnp3.OperateType
+    ) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def select_ao_i16(self, value: int, index: int) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def operate_ao_i16(
+        self, value: int, index: int, op_type: dnp3.OperateType
+    ) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def select_ao_f32(self, value: float, index: int) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def operate_ao_f32(
+        self, value: float, index: int, op_type: dnp3.OperateType
+    ) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def select_ao_f64(self, value: float, index: int) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+    def operate_ao_f64(
+        self, value: float, index: int, op_type: dnp3.OperateType
+    ) -> dnp3.CommandStatus:
+        return dnp3.CommandStatus.NOT_SUPPORTED
+
+
+__all__ = [
+    "CommandHandlerBase",
+    "SoeHandlerBase",
+    "connect",
+    "listen",
+    "run_over_tcp",
+]

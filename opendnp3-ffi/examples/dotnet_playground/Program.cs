@@ -106,59 +106,42 @@ listener.Stop();
 
 Console.WriteLine("\nALL .NET 10 DNP3 CHECKS PASSED!");
 
-sealed class PlaygroundSoeHandler : SoeHandler
+sealed class PlaygroundSoeHandler : SoeHandlerBase
 {
     public List<Binary> Binaries { get; } = [];
     public List<Analog> Analogs { get; } = [];
 
-    public void OnBinary(Binary[] values)
+    public override void OnBinary(Binary[] values)
     {
         foreach (var v in values)
             Console.WriteLine($"  [Master SOE] Binary[{v.Index}] = {v.Value} (flags=0x{v.Flags:x2})");
         Binaries.AddRange(values);
     }
 
-    public void OnDoubleBit(DoubleBitBinary[] values) { }
-    public void OnBinaryOutputStatus(BinaryOutputStatus[] values) { }
-    public void OnCounter(Counter[] values) { }
-    public void OnFrozenCounter(FrozenCounter[] values) { }
-
-    public void OnAnalog(Analog[] values)
+    public override void OnAnalog(Analog[] values)
     {
         foreach (var v in values)
             Console.WriteLine($"  [Master SOE] Analog[{v.Index}] = {v.Value} (flags=0x{v.Flags:x2})");
         Analogs.AddRange(values);
     }
-
-    public void OnAnalogOutputStatus(AnalogOutputStatus[] values) { }
-    public void OnOctetString(OctetString[] values) { }
 }
 
-sealed class PlaygroundCommandHandler : CommandHandler
+sealed class PlaygroundCommandHandler : CommandHandlerBase
 {
     public List<ushort> Selected { get; } = [];
     public List<(ushort Index, OperateType OpType)> Operated { get; } = [];
 
-    public CommandStatus SelectCrob(Crob command, ushort index)
+    public override CommandStatus SelectCrob(Crob command, ushort index)
     {
         Console.WriteLine($"  [Outstation CMD] SELECT CROB index={index} op={command.OpType}");
         Selected.Add(index);
         return CommandStatus.Success;
     }
 
-    public CommandStatus OperateCrob(Crob command, ushort index, OperateType opType)
+    public override CommandStatus OperateCrob(Crob command, ushort index, OperateType opType)
     {
         Console.WriteLine($"  [Outstation CMD] OPERATE CROB index={index} op={command.OpType} mode={opType}");
         Operated.Add((index, opType));
         return CommandStatus.Success;
     }
-
-    public CommandStatus SelectAoI32(int value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoI32(int value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoI16(short value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoI16(short value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoF32(float value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoF32(float value, ushort index, OperateType opType) => CommandStatus.NotSupported;
-    public CommandStatus SelectAoF64(double value, ushort index) => CommandStatus.NotSupported;
-    public CommandStatus OperateAoF64(double value, ushort index, OperateType opType) => CommandStatus.NotSupported;
 }
