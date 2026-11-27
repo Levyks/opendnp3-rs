@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
 
 [lints]
 workspace = true
@@ -15,7 +17,7 @@ tls = ["dep:tokio-rustls"]
 serial = ["dep:tokio-serial"]
 
 [dependencies]
-opendnp3 = { path = "../opendnp3", features = ["async"] }
+opendnp3 = { version = "0.1.1", path = "../opendnp3", features = ["async"] }
 tokio = { version = "1", features = ["net", "time", "io-util", "sync", "rt"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"], optional = true }
 tokio-serial = { version = "5", optional = true }
